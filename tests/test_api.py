@@ -114,6 +114,81 @@ def test_health_returns_ok(client: TestClient) -> None:
 
 
 # --------------------------------------------------------------------------
+# GET /nodes
+# --------------------------------------------------------------------------
+
+
+def test_nodes_returns_200(client: TestClient) -> None:
+    response = client.get("/nodes")
+
+    assert response.status_code == 200
+
+
+def test_nodes_returns_every_node_in_the_graph(
+    client: TestClient, graph: CampusGraph
+) -> None:
+    """Guards against exactly the problem this endpoint exists to solve:
+    the API's node list drifting out of sync with the real graph."""
+    body = client.get("/nodes").json()
+
+    assert len(body) == len(graph.nodes)
+    assert {node["id"] for node in body} == set(graph.nodes)
+
+
+def test_each_node_has_the_expected_shape(client: TestClient) -> None:
+    body = client.get("/nodes").json()
+
+    for node in body:
+        assert set(node) == {"id", "name", "building", "floor"}
+        assert isinstance(node["id"], str) and node["id"]
+        assert isinstance(node["name"], str) and node["name"]
+        assert isinstance(node["building"], str) and node["building"]
+        assert isinstance(node["floor"], str) and node["floor"]
+
+
+def test_every_node_matches_the_graph_exactly(
+    client: TestClient, graph: CampusGraph
+) -> None:
+    """Compare every field against the graph, not just the ids.
+
+    Checking only ids would let a mapping bug through: if ``from_node`` sent
+    the id as the name, or dropped the building, the ids would still line up.
+    """
+    body = client.get("/nodes").json()
+
+    for summary in body:
+        node = graph.nodes[summary["id"]]
+        assert summary["name"] == node.name
+        assert summary["building"] == node.building
+        assert summary["floor"] == node.floor
+
+
+def test_a_known_node_carries_its_real_name_and_building(
+    client: TestClient,
+) -> None:
+    body = client.get("/nodes").json()
+
+    by_id = {node["id"]: node for node in body}
+    assert by_id[ORIGIN] == {
+        "id": "Hive_B5_A",
+        "name": "Staircase 1",
+        "building": "Hive",
+        "floor": "B5",
+    }
+    assert by_id[DESTINATION]["name"] == "Side Entrance"
+    assert by_id[DESTINATION]["floor"] == "B4"
+
+
+def test_nodes_response_is_a_plain_list_not_wrapped_in_an_object(
+    client: TestClient,
+) -> None:
+    """A frontend expects to iterate the response directly."""
+    response = client.get("/nodes")
+
+    assert isinstance(response.json(), list)
+
+
+# --------------------------------------------------------------------------
 # POST /route: the successful case
 # --------------------------------------------------------------------------
 
@@ -227,6 +302,119 @@ def test_route_to_the_same_node_is_empty_but_valid(client: TestClient) -> None:
     assert body["edges"] == []
     assert body["total_walk_seconds"] == 0
     assert body["total_distance_m"] == 0
+
+
+# --------------------------------------------------------------------------
+# POST /route: preferences and restrictions
+# --------------------------------------------------------------------------
+#
+# The default route from Hive_B5_A to Hive_B4_E takes the staircase: 4 nodes,
+# 36 s. Avoiding stairs forces the longer way round via the lift: 8 nodes,
+# 67 s. Those two shapes are what these tests tell apart.
+
+
+def post_route_with(client: TestClient, **options):
+    """POST the standard route, plus whatever preference options are given."""
+    payload = {"origin": ORIGIN, "destination": DESTINATION, **options}
+    return client.post("/route", json=payload)
+
+
+def test_defaults_match_an_explicit_fastest_request(client: TestClient) -> None:
+    """Sending no options must mean the same as asking for the fastest route."""
+    implicit = post_route(client, ORIGIN, DESTINATION).json()
+    explicit = post_route_with(
+        client,
+        preference="fastest",
+        allow_stairs=True,
+        allow_lift=True,
+        sheltered_only=False,
+    ).json()
+
+    assert implicit == explicit
+
+
+def test_prefer_lift_takes_the_lift_instead_of_the_stairs(
+    client: TestClient,
+) -> None:
+    body = post_route_with(client, preference="prefer_lift").json()
+
+    assert body["uses_lift"] is True
+    assert body["uses_stairs"] is False
+    # Avoiding the stairs is a longer walk; that is the trade being made.
+    assert body["total_walk_seconds"] > EXPECTED_SECONDS
+
+
+def test_prefer_lift_still_reports_honest_totals(client: TestClient) -> None:
+    """The stairs penalty steers the search; it must not leak into the totals.
+
+    ``total_walk_seconds`` is summed from the edges themselves, so it stays a
+    real walking time rather than the inflated score used to compare routes.
+    """
+    body = post_route_with(client, preference="prefer_lift").json()
+
+    assert body["total_walk_seconds"] == pytest.approx(67.0)
+
+
+def test_refusing_stairs_forces_the_lift_route(client: TestClient) -> None:
+    body = post_route_with(client, allow_stairs=False).json()
+
+    assert body["uses_stairs"] is False
+    assert body["uses_lift"] is True
+
+
+def test_refusing_the_lift_keeps_the_staircase_route(client: TestClient) -> None:
+    body = post_route_with(client, allow_lift=False).json()
+
+    assert body["uses_lift"] is False
+    assert body["nodes"] == EXPECTED_NODES
+
+
+def test_no_route_when_both_stairs_and_lift_are_refused(client: TestClient) -> None:
+    """Origin and destination are on different floors, so something must give."""
+    response = post_route_with(client, allow_stairs=False, allow_lift=False)
+
+    assert response.status_code == 404
+
+
+def test_the_404_says_which_restrictions_caused_it(client: TestClient) -> None:
+    """'No route' alone is not actionable; the user needs to know why."""
+    detail = post_route_with(
+        client, allow_stairs=False, allow_lift=False
+    ).json()["detail"]
+
+    assert "no stairs" in detail
+    assert "no lift" in detail
+
+
+def test_refusing_both_still_works_on_a_single_floor(client: TestClient) -> None:
+    """Ruling out stairs and lifts is fine when no floor change is needed."""
+    response = client.post(
+        "/route",
+        json={
+            "origin": "Hive_B5_A",
+            "destination": "Hive_B5_G",
+            "allow_stairs": False,
+            "allow_lift": False,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["uses_stairs"] is False
+
+
+def test_sheltered_only_succeeds_because_every_edge_is_covered(
+    client: TestClient,
+) -> None:
+    body = post_route_with(client, sheltered_only=True).json()
+
+    assert body["fully_sheltered"] is True
+    assert body["nodes"] == EXPECTED_NODES
+
+
+def test_an_unknown_preference_is_rejected(client: TestClient) -> None:
+    response = post_route_with(client, preference="teleport")
+
+    assert response.status_code == 422
 
 
 # --------------------------------------------------------------------------

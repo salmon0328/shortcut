@@ -2,103 +2,120 @@
   "nodes": [
     {
       "id": "Hive_B5_A",
-      "name": "Hive Level B5 Staircase 1",
+      "name": "Staircase 1",
+      "building": "Hive",
       "floor": "B5",
       "type": "stairs"
     },
     {
       "id": "Hive_B5_B",
-      "name": "Hive Level B5 Lift",
+      "name": "Lift",
+      "building": "Hive",
       "floor": "B5",
       "type": "lift"
     },
     {
       "id": "Hive_B5_C",
-      "name": "Hive Level B5 Staircase 3",
+      "name": "Staircase 3",
+      "building": "Hive",
       "floor": "B5",
       "type": "stairs"
     },
     {
       "id": "Hive_B5_D",
-      "name": "Hive Level B5 Main Entarance",
+      "name": "Main Entrance",
+      "building": "Hive",
       "floor": "B5",
       "type": "junction"
     },
     {
       "id": "Hive_B5_E",
-      "name": "Hive Level B5 Staircase 2",
+      "name": "Staircase 2",
+      "building": "Hive",
       "floor": "B5",
       "type": "stairs"
     },
     {
       "id": "Hive_B5_F",
-      "name": "Hive Level B5 Pick Lockers",
+      "name": "Pick Lockers",
+      "building": "Hive",
       "floor": "B5",
       "type": "junction"
     },
     {
       "id": "Hive_B5_G",
-      "name": "Hive Level B5 Courtyard",
+      "name": "Courtyard",
+      "building": "Hive",
       "floor": "B5",
       "type": "junction"
     },
     {
       "id": "Hive_B5_H",
-      "name": "Hive Level B5 Lift Lobby",
+      "name": "Lift Lobby",
+      "building": "Hive",
       "floor": "B5",
       "type": "junction"
     },
     {
       "id": "Hive_B5_I",
-      "name": "Hive Level B5 Main Staircase",
+      "name": "Main Staircase",
+      "building": "Hive",
       "floor": "B5",
       "type": "stairs"
     },
     {
       "id": "Hive_B4_A",
-      "name": "Hive Level B4 Staircase 1",
+      "name": "Staircase 1",
+      "building": "Hive",
       "floor": "B4",
       "type": "stairs"
     },
     {
       "id": "Hive_B4_B",
-      "name": "Hive Level B4 Lift",
+      "name": "Lift",
+      "building": "Hive",
       "floor": "B4",
       "type": "lift"
     },
     {
       "id": "Hive_B4_C",
-      "name": "Hive Level B4 Staircase 3",
+      "name": "Staircase 3",
+      "building": "Hive",
       "floor": "B4",
       "type": "stairs"
     },
     {
       "id": "Hive_B4_D",
-      "name": "Hive Level B4 Staircase 2",
+      "name": "Staircase 2",
+      "building": "Hive",
       "floor": "B4",
       "type": "stairs"
     },
     {
       "id": "Hive_B4_E",
-      "name": "Hive Level B4 Side Entrance",
+      "name": "Side Entrance",
+      "building": "Hive",
       "floor": "B4",
       "type": "junction"
     },
     {
       "id": "Hive_B4_F",
-      "name": "Hive Level B4 Back Entrance",
+      "name": "Back Entrance",
+      "building": "Hive",
       "floor": "B4",
       "type": "junction"
     },
     {
       "id": "Hive_B4_G",
-      "name": "Hive Level B4 Main Staircase",
+      "name": "Main Staircase",
+      "building": "Hive",
       "floor": "B4",
       "type": "stairs"
     },
     {
       "id": "Hive_B4_H",
-      "name": "Hive Level B4 Lift Lobby",
+      "name": "Lift Lobby",
+      "building": "Hive",
       "floor": "B4",
       "type": "junction"
     }

@@ -30,6 +30,8 @@ __all__ = [
     "Heuristic",
     "edge_seconds",
     "edge_metres",
+    "prefer_lift_cost",
+    "DEFAULT_STAIRS_PENALTY_SECONDS",
     "zero_heuristic",
     "heuristic_for",
     "find_route",
@@ -128,8 +130,36 @@ def edge_seconds(edge: Edge) -> float:
 
 
 def edge_metres(edge: Edge) -> float:
-    """Alternative cost: distance in metres."""
+    """Alternative cost: distance in metres.
+
+    Note this does *not* mean "less effort". A staircase between floors is a
+    short distance, so minimising metres tends to pick stairs over a lift.
+    Use :func:`prefer_lift_cost` to avoid climbing.
+    """
     return edge.distance_m
+
+
+# How much extra walking time someone would accept to avoid one flight of
+# stairs. Tunable: 60 seconds is enough that a lift wins wherever one exists
+# in the current graph, while still leaving stairs usable as a last resort.
+DEFAULT_STAIRS_PENALTY_SECONDS = 60.0
+
+
+def prefer_lift_cost(
+    stairs_penalty_seconds: float = DEFAULT_STAIRS_PENALTY_SECONDS,
+) -> CostFunction:
+    """Walking time, plus a penalty every time the route climbs stairs.
+
+    This is a *soft* preference, which is the point. Filtering stairs out
+    entirely can leave someone with no route at all; a penalty only makes
+    stairs a last resort, so a route is still returned when the lift is out
+    of reach or blocked.
+    """
+
+    def cost(edge: Edge) -> float:
+        return edge.walk_seconds + (stairs_penalty_seconds if edge.stairs else 0.0)
+
+    return cost
 
 
 # --------------------------------------------------------------------------

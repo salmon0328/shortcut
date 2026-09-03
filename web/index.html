@@ -27,6 +27,45 @@
           <select id="destination" name="destination" required></select>
         </div>
 
+        <fieldset class="options">
+          <legend>Route preference</legend>
+
+          <label class="choice">
+            <input type="radio" name="preference" value="fastest" checked />
+            <span>
+              Fastest
+              <small>Whichever is quicker, stairs or lift</small>
+            </span>
+          </label>
+
+          <label class="choice">
+            <input type="radio" name="preference" value="prefer_lift" />
+            <span>
+              Less climbing
+              <small>Takes the lift where there is one</small>
+            </span>
+          </label>
+        </fieldset>
+
+        <fieldset class="options">
+          <legend>Only use</legend>
+
+          <label class="choice">
+            <input type="checkbox" id="allow-stairs" checked />
+            <span>Stairs allowed</span>
+          </label>
+
+          <label class="choice">
+            <input type="checkbox" id="allow-lift" checked />
+            <span>Lifts allowed</span>
+          </label>
+
+          <label class="choice">
+            <input type="checkbox" id="sheltered-only" />
+            <span>Sheltered corridors only</span>
+          </label>
+        </fieldset>
+
         <button type="submit" id="find-button">Find route</button>
       </form>
 

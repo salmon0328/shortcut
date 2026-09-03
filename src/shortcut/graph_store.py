@@ -86,6 +86,10 @@ class Node:
 
     id: NodeId
     name: str
+    # Which building this point is in, e.g. "Hive". Required, because a node
+    # with no building cannot be grouped or labelled once the graph covers
+    # more than one building. Edges may join nodes in different buildings.
+    building: str
     floor: str
     type: str
     # Optional floorplan coordinates in metres. A* can use these for its
@@ -219,10 +223,11 @@ def _parse_node(raw: Any, index: int) -> Node:
         raise GraphSchemaError(f"{where}: each node must be a JSON object, got {type(raw).__name__}.")
 
     node_id = _require_str(raw, "id", where)
-    known_keys = {"id", "name", "floor", "type", "x", "y"}
+    known_keys = {"id", "name", "building", "floor", "type", "x", "y"}
     return Node(
         id=node_id,
         name=_optional_str(raw, "name", where, default=node_id),
+        building=_require_str(raw, "building", where),
         floor=_optional_str(raw, "floor", where),
         type=_optional_str(raw, "type", where, default="point"),
         x=_optional_number(raw, "x", where),
