@@ -335,6 +335,42 @@ def test_routes_within_one_island_still_work(two_island_graph: CampusGraph) -> N
 
 
 # --------------------------------------------------------------------------
+# Shelter
+# --------------------------------------------------------------------------
+
+
+def test_real_graph_routes_are_fully_sheltered(graph: CampusGraph) -> None:
+    """Every edge in campus_graph.json is covered, so any route is sheltered."""
+    route = find_route(graph, ORIGIN, DESTINATION)
+
+    assert route.fully_sheltered is True
+
+
+def test_one_uncovered_edge_makes_the_whole_route_unsheltered(
+    graph_path: Path,
+    tmp_path: Path,
+) -> None:
+    """Uses "all", not "any": one open-air stretch counts against the route."""
+    data = copy.deepcopy(json.loads(graph_path.read_text(encoding="utf-8")))
+    for edge in data["edges"]:
+        if edge["id"] == EXPECTED_EDGES[0]:
+            edge["covered"] = False
+    open_air_graph = load_graph(write_graph(tmp_path, data, "open_air.json"))
+
+    route = find_route(open_air_graph, ORIGIN, DESTINATION)
+
+    assert EXPECTED_EDGES[0] in route.edge_ids, "expected the same path as before"
+    assert route.fully_sheltered is False
+
+
+def test_a_route_to_the_same_node_counts_as_sheltered(graph: CampusGraph) -> None:
+    """Walking no edges at all means no exposure to the weather."""
+    route = find_route(graph, ORIGIN, ORIGIN)
+
+    assert route.fully_sheltered is True
+
+
+# --------------------------------------------------------------------------
 # Safety net: the committed graph file must stay untouched
 # --------------------------------------------------------------------------
 

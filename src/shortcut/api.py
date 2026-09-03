@@ -8,6 +8,9 @@ here.
 No Claude, no Bedrock, no LangGraph, no AWS: every answer comes from
 ``data/campus_graph.json`` and ordinary Python.
 
+Browser pages served from the local development frontend are allowed to call
+this API; see :data:`DEV_ALLOWED_ORIGINS`.
+
 Run it from the repository root with::
 
     uvicorn --app-dir src shortcut.api:app --reload
@@ -22,12 +25,13 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi.middleware.cors import CORSMiddleware
 
 from shortcut.graph_store import CampusGraph, UnknownNodeError, load_graph
 from shortcut.schemas import RouteRequest, RouteResponse
 from shortcut.tools.astar import NoRouteFoundError, find_route
 
-__all__ = ["app", "get_graph", "CAMPUS_GRAPH_PATH"]
+__all__ = ["app", "get_graph", "CAMPUS_GRAPH_PATH", "DEV_ALLOWED_ORIGINS"]
 
 
 # --------------------------------------------------------------------------
@@ -40,6 +44,23 @@ __all__ = ["app", "get_graph", "CAMPUS_GRAPH_PATH"]
 # started in.
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CAMPUS_GRAPH_PATH = PROJECT_ROOT / "data" / "campus_graph.json"
+
+
+# --------------------------------------------------------------------------
+# Which browser pages may call this API
+# --------------------------------------------------------------------------
+
+# A browser refuses to let a page read a response from a different origin
+# unless the server says that origin is welcome. These are the addresses the
+# local development frontend runs on (5173 is Vite's default port).
+#
+# Listed explicitly rather than with "*": a wildcard would let any website a
+# user happens to be visiting call this API from their browser. Add the real
+# deployed frontend's address here when there is one.
+DEV_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
 
 
 # --------------------------------------------------------------------------
@@ -68,6 +89,19 @@ app = FastAPI(
     version="0.1.0",
     summary="Deterministic indoor navigation for one campus building.",
     lifespan=lifespan,
+)
+
+# Cross-Origin Resource Sharing. This only adds response headers telling the
+# browser which pages are allowed to read the answers; it does not change what
+# /health or /route do, and it has no effect on non-browser callers such as
+# curl, pytest or another server.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=DEV_ALLOWED_ORIGINS,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
+    # No cookies or auth headers are used, so credentialed requests stay off.
+    allow_credentials=False,
 )
 
 

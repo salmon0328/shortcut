@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Shortcut</title>
+  </head>
+  <body>
+    <main class="page">
+      <header>
+        <h1>Shortcut</h1>
+        <p class="description">
+          Find the quickest walking route between two points inside the Hive.
+          Pick where you are and where you want to go.
+        </p>
+      </header>
+
+      <!-- A form, so pressing Enter works the same as clicking the button. -->
+      <form id="route-form" class="card">
+        <div class="field">
+          <label for="origin">From</label>
+          <select id="origin" name="origin" required></select>
+        </div>
+
+        <div class="field">
+          <label for="destination">To</label>
+          <select id="destination" name="destination" required></select>
+        </div>
+
+        <button type="submit" id="find-button">Find route</button>
+      </form>
+
+      <!-- Only one of these three is ever visible at a time. -->
+      <p id="loading" class="status loading" hidden>Finding the best route…</p>
+
+      <p id="error" class="status error" hidden></p>
+
+      <section id="result" class="card result" hidden>
+        <h2 id="result-heading">Your route</h2>
+
+        <dl class="totals">
+          <div>
+            <dt>Walking time</dt>
+            <dd id="total-time">—</dd>
+          </div>
+          <div>
+            <dt>Distance</dt>
+            <dd id="total-distance">—</dd>
+          </div>
+        </dl>
+
+        <ul class="badges">
+          <li id="badge-stairs"></li>
+          <li id="badge-lift"></li>
+          <li id="badge-shelter"></li>
+        </ul>
+
+        <h3>Steps</h3>
+        <ol id="route-steps" class="steps"></ol>
+      </section>
+    </main>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

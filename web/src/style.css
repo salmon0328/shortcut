@@ -1,0 +1,202 @@
+/* Plain CSS, no frameworks. Kept short on purpose. */
+
+:root {
+  --ink: #1c1f23;
+  --muted: #5c6672;
+  --line: #dfe3e8;
+  --card: #ffffff;
+  --page: #f4f6f8;
+  --accent: #1b6ac9;
+  --yes: #1a7f4b;
+  --no: #8a6100;
+  --error-ink: #8d2020;
+  --error-bg: #fdeaea;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--ink);
+  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+.page {
+  max-width: 34rem;
+  margin: 0 auto;
+  padding: 2rem 1rem 4rem;
+}
+
+h1 {
+  margin: 0 0 0.25rem;
+  font-size: 1.75rem;
+}
+
+.description {
+  margin: 0 0 1.5rem;
+  color: var(--muted);
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  padding: 1.25rem;
+}
+
+/* --- form --- */
+
+.field {
+  margin-bottom: 1rem;
+}
+
+label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+select {
+  width: 100%;
+  padding: 0.5rem;
+  font: inherit;
+  color: inherit;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 0.375rem;
+}
+
+button {
+  width: 100%;
+  padding: 0.625rem;
+  font: inherit;
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent);
+  border: none;
+  border-radius: 0.375rem;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  background: #15559f;
+}
+
+button:disabled {
+  background: var(--muted);
+  cursor: progress;
+}
+
+/* --- loading and error --- */
+
+.status {
+  margin: 1rem 0 0;
+  padding: 0.75rem 1rem;
+  border-radius: 0.375rem;
+}
+
+.loading {
+  color: var(--muted);
+  background: var(--card);
+  border: 1px solid var(--line);
+}
+
+.error {
+  color: var(--error-ink);
+  background: var(--error-bg);
+  border: 1px solid #f3c9c9;
+}
+
+/* --- result --- */
+
+.result {
+  margin-top: 1rem;
+}
+
+.result h2 {
+  margin: 0 0 1rem;
+  font-size: 1.25rem;
+}
+
+.result h3 {
+  margin: 1.25rem 0 0.5rem;
+  font-size: 1rem;
+}
+
+.totals {
+  display: flex;
+  gap: 2rem;
+  margin: 0;
+}
+
+.totals dt {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.totals dd {
+  margin: 0.125rem 0 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.badge {
+  padding: 0.25rem 0.625rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.badge.yes {
+  color: var(--yes);
+  background: #e7f5ec;
+}
+
+.badge.no {
+  color: var(--no);
+  background: #fdf3e0;
+}
+
+/* --- steps --- */
+
+.steps {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.steps li {
+  padding: 0.375rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.steps li:last-child {
+  border-bottom: none;
+}
+
+.step-name {
+  display: block;
+}
+
+.step-id {
+  color: var(--muted);
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 0.8rem;
+}
+
+.step-note {
+  color: var(--muted);
+  list-style: none;
+}

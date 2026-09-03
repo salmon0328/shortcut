@@ -86,6 +86,7 @@ class RouteResponse(BaseModel):
                 "total_walk_seconds": 49.0,
                 "uses_stairs": True,
                 "uses_lift": False,
+                "fully_sheltered": True,
             }
         },
     )
@@ -120,6 +121,13 @@ class RouteResponse(BaseModel):
         default=False,
         description="True if any part of the route uses a lift.",
     )
+    fully_sheltered: bool = Field(
+        default=True,
+        description=(
+            "True only if every corridor on the route is covered. One "
+            "uncovered stretch makes the whole route unsheltered."
+        ),
+    )
 
     @model_validator(mode="after")
     def check_edges_match_nodes(self) -> "RouteResponse":
@@ -152,4 +160,5 @@ class RouteResponse(BaseModel):
             total_walk_seconds=route.total_seconds,
             uses_stairs=route.uses_stairs,
             uses_lift=route.uses_lift,
+            fully_sheltered=route.fully_sheltered,
         )
