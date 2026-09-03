@@ -90,10 +90,10 @@ def two_island_graph(tmp_path: Path) -> CampusGraph:
     """A tiny graph in two disconnected halves: A-B and Y-Z."""
     data = {
         "nodes": [
-            {"id": "A", "name": "Island 1 start", "floor": "L1", "type": "junction"},
-            {"id": "B", "name": "Island 1 end", "floor": "L1", "type": "junction"},
-            {"id": "Y", "name": "Island 2 start", "floor": "L1", "type": "junction"},
-            {"id": "Z", "name": "Island 2 end", "floor": "L1", "type": "junction"},
+            {"id": "A", "name": "Island 1 start", "building": "Test", "floor": "L1", "type": "junction"},
+            {"id": "B", "name": "Island 1 end", "building": "Test", "floor": "L1", "type": "junction"},
+            {"id": "Y", "name": "Island 2 start", "building": "Test", "floor": "L1", "type": "junction"},
+            {"id": "Z", "name": "Island 2 end", "building": "Test", "floor": "L1", "type": "junction"},
         ],
         "edges": [
             {

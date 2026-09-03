@@ -27,9 +27,16 @@ from pathlib import Path
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 
-from shortcut.graph_store import CampusGraph, UnknownNodeError, load_graph
-from shortcut.schemas import RouteRequest, RouteResponse
-from shortcut.tools.astar import NoRouteFoundError, find_route
+from shortcut.graph_store import CampusGraph, Edge, UnknownNodeError, load_graph
+from shortcut.schemas import NodeSummary, RouteRequest, RouteResponse
+from shortcut.tools.astar import (
+    CostFunction,
+    EdgeFilter,
+    NoRouteFoundError,
+    edge_seconds,
+    find_route,
+    prefer_lift_cost,
+)
 
 __all__ = ["app", "get_graph", "CAMPUS_GRAPH_PATH", "DEV_ALLOWED_ORIGINS"]
 
@@ -123,6 +130,55 @@ def get_graph(request: Request) -> CampusGraph:
 
 
 # --------------------------------------------------------------------------
+# Turning a caller's preferences into routing rules
+# --------------------------------------------------------------------------
+
+
+def cost_for(route_request: RouteRequest) -> CostFunction:
+    """Pick the scoring function that matches the requested preference."""
+    if route_request.preference == "prefer_lift":
+        return prefer_lift_cost()
+    return edge_seconds
+
+
+def edge_filter_for(route_request: RouteRequest) -> EdgeFilter | None:
+    """Build one rule that every usable edge must satisfy, or None.
+
+    Returning ``None`` when nothing was restricted keeps the common case free
+    of a pointless per-edge callback. Blocked edges are excluded by the graph
+    itself, so they never need mentioning here.
+    """
+    rules: list[EdgeFilter] = []
+
+    if not route_request.allow_stairs:
+        rules.append(lambda edge: not edge.stairs)
+    if not route_request.allow_lift:
+        rules.append(lambda edge: not edge.lift)
+    if route_request.sheltered_only:
+        rules.append(lambda edge: edge.covered)
+
+    if not rules:
+        return None
+
+    def passes_every_rule(edge: Edge) -> bool:
+        return all(rule(edge) for rule in rules)
+
+    return passes_every_rule
+
+
+def _restrictions_in_words(route_request: RouteRequest) -> str:
+    """Describe the active restrictions, for a 'no route' error message."""
+    restrictions = []
+    if not route_request.allow_stairs:
+        restrictions.append("no stairs")
+    if not route_request.allow_lift:
+        restrictions.append("no lift")
+    if route_request.sheltered_only:
+        restrictions.append("sheltered only")
+    return ", ".join(restrictions)
+
+
+# --------------------------------------------------------------------------
 # Endpoints
 # --------------------------------------------------------------------------
 
@@ -131,6 +187,25 @@ def get_graph(request: Request) -> CampusGraph:
 def health() -> dict[str, str]:
     """Cheap liveness check for deployment tools and uptime monitors."""
     return {"status": "ok"}
+
+
+@app.get(
+    "/nodes",
+    response_model=list[NodeSummary],
+    summary="List every navigation point a route can start or end at",
+)
+def get_nodes(graph: CampusGraph = Depends(get_graph)) -> list[NodeSummary]:
+    """Return every node in the graph, for building a dropdown or a picker.
+
+    This is the single source of truth for "what places exist": it reads the
+    same in-memory graph ``/route`` uses, straight from
+    ``data/campus_graph.json``. A frontend that calls this instead of keeping
+    its own hand-typed node list can never drift out of sync with the graph.
+
+    Returned in the order the nodes appear in the graph file, which today
+    means grouped by floor (B5, then B4).
+    """
+    return [NodeSummary.from_node(node) for node in graph.nodes.values()]
 
 
 @app.post(
@@ -161,7 +236,13 @@ def post_route(
     and the server stays responsive to other requests.
     """
     try:
-        route = find_route(graph, route_request.origin, route_request.destination)
+        route = find_route(
+            graph,
+            route_request.origin,
+            route_request.destination,
+            cost=cost_for(route_request),
+            edge_filter=edge_filter_for(route_request),
+        )
     except UnknownNodeError as error:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -171,11 +252,19 @@ def post_route(
             ),
         ) from error
     except NoRouteFoundError as error:
+        # Say which restrictions were in force: "no route" is far less useful
+        # than "no route once you ruled out stairs and lifts".
+        restrictions = _restrictions_in_words(route_request)
+        reason = (
+            f"No route matches your choices ({restrictions})."
+            if restrictions
+            else "Every connecting path may be blocked."
+        )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=(
                 f"No walkable route from {error.origin!r} to "
-                f"{error.destination!r}. Every connecting path may be blocked."
+                f"{error.destination!r}. {reason}"
             ),
         ) from error
 

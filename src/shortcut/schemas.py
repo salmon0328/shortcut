@@ -16,11 +16,68 @@ No AI, no Bedrock, no AWS: this layer only validates data.
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from shortcut.graph_store import Node
 from shortcut.tools.astar import Route
 
-__all__ = ["RouteRequest", "RouteResponse"]
+__all__ = ["NodeSummary", "RoutePreference", "RouteRequest", "RouteResponse"]
+
+
+# How a caller wants a route scored. Anything outside this set is rejected by
+# Pydantic with a 422 naming the allowed values.
+RoutePreference = Literal["fastest", "prefer_lift"]
+
+
+# --------------------------------------------------------------------------
+# Nodes
+# --------------------------------------------------------------------------
+
+
+class NodeSummary(BaseModel):
+    """One navigation point, as shown in a dropdown or a picker.
+
+    This is the API's answer to "what places exist?" It is deliberately a
+    smaller view of the internal :class:`~shortcut.graph_store.Node` than the
+    graph file stores: a frontend choosing where to send someone does not need
+    the node's floorplan coordinates or type, just something to show and an id
+    to send back in a :class:`RouteRequest`.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={
+            "example": {
+                "id": "Hive_B5_A",
+                "name": "Staircase 1",
+                "building": "Hive",
+                "floor": "B5",
+            }
+        },
+    )
+
+    id: str = Field(description="Node id to use as an origin or destination.")
+    name: str = Field(
+        description=(
+            "Human-readable name to display, e.g. 'Staircase 1'. Not unique "
+            "on its own: pair it with the building and floor to identify a "
+            "place to a user."
+        )
+    )
+    building: str = Field(description="Which building this node is in, e.g. 'Hive'.")
+    floor: str = Field(description="Which floor this node is on, e.g. 'B5'.")
+
+    @classmethod
+    def from_node(cls, node: Node) -> "NodeSummary":
+        """Convert a graph :class:`~shortcut.graph_store.Node` into this shape."""
+        return cls(
+            id=node.id,
+            name=node.name,
+            building=node.building,
+            floor=node.floor,
+        )
 
 
 # --------------------------------------------------------------------------
@@ -44,7 +101,14 @@ class RouteRequest(BaseModel):
         str_strip_whitespace=True,
         extra="forbid",
         json_schema_extra={
-            "example": {"origin": "Hive_B5_A", "destination": "Hive_B4_C"}
+            "example": {
+                "origin": "Hive_B5_A",
+                "destination": "Hive_B4_C",
+                "preference": "fastest",
+                "allow_stairs": True,
+                "allow_lift": True,
+                "sheltered_only": False,
+            }
         },
     )
 
@@ -59,8 +123,34 @@ class RouteRequest(BaseModel):
         description="Node id to finish at, e.g. 'Hive_B4_C'.",
     )
 
+    preference: RoutePreference = Field(
+        default="fastest",
+        description=(
+            "How to score a route. 'fastest' minimises walking time. "
+            "'prefer_lift' also minimises time but heavily penalises stairs, "
+            "so a lift is chosen wherever one exists. This is a soft "
+            "preference: stairs are still used if there is no other way."
+        ),
+    )
+    allow_stairs: bool = Field(
+        default=True,
+        description="Set false to refuse any route that climbs stairs.",
+    )
+    allow_lift: bool = Field(
+        default=True,
+        description="Set false to refuse any route that uses a lift.",
+    )
+    sheltered_only: bool = Field(
+        default=False,
+        description="Set true to use only covered corridors.",
+    )
+
     # Note: origin == destination is deliberately allowed. The router handles
     # it and returns a valid empty route, so it is not an error.
+    #
+    # Note: allow_stairs=false together with allow_lift=false is also allowed.
+    # It is a sensible request on one floor, and simply finds no route when
+    # the two nodes are on different floors.
 
 
 # --------------------------------------------------------------------------
