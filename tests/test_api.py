@@ -22,7 +22,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from shortcut.api import app, get_graph
+from shortcut.api import DEV_ALLOWED_ORIGINS, app, get_graph
 from shortcut.graph_store import CampusGraph, load_graph
 
 # The route under test, taken from the real graph:
@@ -88,6 +88,19 @@ def post_route(client: TestClient, origin: str, destination: str):
     return client.post("/route", json={"origin": origin, "destination": destination})
 
 
+def post_route_with_origin(client: TestClient, browser_origin: str):
+    """Send the standard POST /route request as if from a browser page.
+
+    ``browser_origin`` is the web address of the calling page, which is what
+    CORS checks. It is unrelated to the route's ``origin`` node.
+    """
+    return client.post(
+        "/route",
+        json={"origin": ORIGIN, "destination": DESTINATION},
+        headers={"Origin": browser_origin},
+    )
+
+
 # --------------------------------------------------------------------------
 # GET /health
 # --------------------------------------------------------------------------
@@ -131,6 +144,7 @@ def test_route_response_matches_the_schema(client: TestClient) -> None:
         "total_walk_seconds",
         "uses_stairs",
         "uses_lift",
+        "fully_sheltered",
     }
 
 
@@ -166,6 +180,13 @@ def test_route_reports_stairs_but_not_lift(client: TestClient) -> None:
 
     assert body["uses_stairs"] is True
     assert body["uses_lift"] is False
+
+
+def test_route_reports_shelter(client: TestClient) -> None:
+    """Every edge in the real graph is covered, so this route is sheltered."""
+    body = post_route(client, ORIGIN, DESTINATION).json()
+
+    assert body["fully_sheltered"] is True
 
 
 def test_route_has_one_fewer_edge_than_nodes(client: TestClient) -> None:
@@ -283,6 +304,105 @@ def test_cut_off_graph_still_serves_reachable_routes(
 
     assert response.status_code == 200
     assert response.json()["nodes"] == EXPECTED_NODES
+
+
+# --------------------------------------------------------------------------
+# CORS: which browser pages may read our responses
+# --------------------------------------------------------------------------
+#
+# CORS lives entirely in HTTP response headers. The server always does the work
+# and always sends the answer; the *browser* then decides whether the calling
+# page is allowed to read it, based on those headers. So these tests check the
+# headers, not the status codes.
+
+DISALLOWED_ORIGIN = "http://evil.example.com"
+
+
+@pytest.mark.parametrize("origin", DEV_ALLOWED_ORIGINS)
+def test_preflight_from_an_allowed_origin_is_accepted(
+    client: TestClient, origin: str
+) -> None:
+    """Before a real POST, a browser sends an OPTIONS 'may I?' request."""
+    response = client.options(
+        "/route",
+        headers={
+            "Origin": origin,
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == origin
+    assert "POST" in response.headers["access-control-allow-methods"]
+    assert "content-type" in response.headers["access-control-allow-headers"].lower()
+
+
+@pytest.mark.parametrize("origin", DEV_ALLOWED_ORIGINS)
+def test_allowed_origin_may_read_a_route_response(
+    client: TestClient, origin: str
+) -> None:
+    response = post_route_with_origin(client, origin)
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == origin
+
+
+@pytest.mark.parametrize("origin", DEV_ALLOWED_ORIGINS)
+def test_allowed_origin_may_read_the_health_response(
+    client: TestClient, origin: str
+) -> None:
+    response = client.get("/health", headers={"Origin": origin})
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == origin
+
+
+def test_disallowed_origin_gets_no_cors_header(client: TestClient) -> None:
+    """The security-relevant case: a stranger's page cannot read the answer.
+
+    The request itself still runs, but without the allow-origin header the
+    browser refuses to hand the response to the calling page.
+    """
+    response = post_route_with_origin(client, DISALLOWED_ORIGIN)
+
+    assert "access-control-allow-origin" not in response.headers
+
+
+def test_wildcard_origin_is_never_returned(client: TestClient) -> None:
+    """Guards the 'no allow_origins=["*"]' requirement."""
+    for origin in [*DEV_ALLOWED_ORIGINS, DISALLOWED_ORIGIN]:
+        response = post_route_with_origin(client, origin)
+        assert response.headers.get("access-control-allow-origin") != "*"
+
+
+def test_methods_beyond_get_and_post_are_not_offered(client: TestClient) -> None:
+    allowed = client.options(
+        "/route",
+        headers={
+            "Origin": DEV_ALLOWED_ORIGINS[0],
+            "Access-Control-Request-Method": "POST",
+        },
+    ).headers["access-control-allow-methods"]
+
+    assert "DELETE" not in allowed
+    assert "PUT" not in allowed
+
+
+def test_requests_without_an_origin_are_untouched(client: TestClient) -> None:
+    """curl, pytest and server-to-server callers see no CORS headers at all."""
+    response = post_route(client, ORIGIN, DESTINATION)
+
+    assert response.status_code == 200
+    assert "access-control-allow-origin" not in response.headers
+
+
+def test_cors_does_not_change_the_route_response_body(client: TestClient) -> None:
+    """Adding CORS must not alter what /route actually returns."""
+    without_origin = post_route(client, ORIGIN, DESTINATION).json()
+    with_origin = post_route_with_origin(client, DEV_ALLOWED_ORIGINS[0]).json()
+
+    assert with_origin == without_origin
 
 
 # --------------------------------------------------------------------------

@@ -86,6 +86,10 @@ class Route:
     total_distance_m: float
     uses_stairs: bool = False
     uses_lift: bool = False
+    # True only when *every* edge on the route is covered. A route with no
+    # edges at all (origin == destination) counts as sheltered: you do not go
+    # outside if you do not move.
+    fully_sheltered: bool = True
     # How much of the search space A* had to open. Useful in tests and for
     # comparing heuristics; it never affects the route itself.
     nodes_expanded: int = 0
@@ -241,6 +245,8 @@ def _build_route(
         total_distance_m=sum(edge.distance_m for edge in edges),
         uses_stairs=any(edge.stairs for edge in edges),
         uses_lift=any(edge.lift for edge in edges),
+        # "all" not "any": one uncovered corridor makes the whole walk unsheltered.
+        fully_sheltered=all(edge.covered for edge in edges),
         nodes_expanded=nodes_expanded,
     )
 
