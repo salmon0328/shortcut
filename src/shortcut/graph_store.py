@@ -24,6 +24,7 @@ __all__ = [
     "Node",
     "Edge",
     "CampusGraph",
+    "build_graph",
     "load_graph",
     "get_node",
     "get_edges_from",
@@ -110,6 +111,8 @@ class Node:
     # heuristic later; routing must still work when they are absent.
     x: float | None = None
     y: float | None = None
+    # A known problem at this place, e.g. "crowded". Advisory only; see Edge.
+    condition: str | None = None
     # Anything else the JSON carried, kept so nothing is silently lost.
     extra: dict[str, Any] = field(default_factory=dict, repr=False)
 
@@ -141,6 +144,10 @@ class Edge:
     # left without text.
     directions_forward: str | None = None
     directions_reverse: str | None = None
+    # A known problem here, e.g. "flooded" or "crowded". Advisory only: what
+    # actually keeps a route away is ``blocked``. Usually set by an approved
+    # report rather than written into the graph file by hand.
+    condition: str | None = None
     extra: dict[str, Any] = field(default_factory=dict, repr=False)
 
     def other_end(self, node_id: NodeId) -> NodeId:
@@ -270,7 +277,7 @@ def _parse_node(raw: Any, index: int) -> Node:
         raise GraphSchemaError(f"{where}: each node must be a JSON object, got {type(raw).__name__}.")
 
     node_id = _require_str(raw, "id", where)
-    known_keys = {"id", "name", "building", "floor", "type", "x", "y"}
+    known_keys = {"id", "name", "building", "floor", "type", "x", "y", "condition"}
     return Node(
         id=node_id,
         name=_optional_str(raw, "name", where, default=node_id),
@@ -279,6 +286,7 @@ def _parse_node(raw: Any, index: int) -> Node:
         type=_optional_str(raw, "type", where, default="point"),
         x=_optional_number(raw, "x", where),
         y=_optional_number(raw, "y", where),
+        condition=_optional_text(raw, "condition", where),
         extra={k: v for k, v in raw.items() if k not in known_keys},
     )
 
@@ -297,7 +305,7 @@ def _parse_edge(raw: Any, index: int) -> Edge:
     known_keys = {
         "id", "from", "to", "distance_m", "walk_seconds",
         "covered", "stairs", "lift", "blocked", "one_way",
-        "directions_forward", "directions_reverse",
+        "directions_forward", "directions_reverse", "condition",
     }
     return Edge(
         id=edge_id,
@@ -312,6 +320,7 @@ def _parse_edge(raw: Any, index: int) -> Edge:
         one_way=_optional_bool(raw, "one_way", where),
         directions_forward=_optional_text(raw, "directions_forward", where),
         directions_reverse=_optional_text(raw, "directions_reverse", where),
+        condition=_optional_text(raw, "condition", where),
         extra={k: v for k, v in raw.items() if k not in known_keys},
     )
 
@@ -391,7 +400,6 @@ def load_graph(path: str | Path) -> CampusGraph:
     # --- edges ---
     edges: list[Edge] = []
     seen_edge_ids: set[str] = set()
-    adjacency: dict[NodeId, list[Edge]] = {node_id: [] for node_id in nodes}
 
     for index, raw_edge in enumerate(data["edges"]):
         edge = _parse_edge(raw_edge, index)
@@ -407,6 +415,25 @@ def load_graph(path: str | Path) -> CampusGraph:
         seen_edge_ids.add(edge.id)
 
         edges.append(edge)
+
+    return build_graph(nodes, edges, source_path=graph_path)
+
+
+def build_graph(
+    nodes: dict[NodeId, Node],
+    edges: list[Edge],
+    source_path: Path | None = None,
+) -> CampusGraph:
+    """Assemble already-validated nodes and edges into a graph.
+
+    Separate from :func:`load_graph` because the graph is built twice: once
+    from the JSON file, and again whenever live overrides (such as an approved
+    blockage report) change an edge. Both paths need the same indexes, and
+    building them in one place keeps the two identical.
+    """
+    adjacency: dict[NodeId, list[Edge]] = {node_id: [] for node_id in nodes}
+
+    for edge in edges:
         # Index the edge under both endpoints so it can be walked in either
         # direction; one-way edges are only reachable from their "from" node.
         adjacency[edge.from_id].append(edge)
@@ -418,7 +445,7 @@ def load_graph(path: str | Path) -> CampusGraph:
         edges=edges,
         adjacency=adjacency,
         edges_by_id={edge.id: edge for edge in edges},
-        source_path=graph_path,
+        source_path=source_path,
     )
 
 

@@ -21,15 +21,27 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from shortcut.directions import step_text
-from shortcut.graph_store import CampusGraph, Node
+from shortcut.graph_store import CampusGraph, Edge, Node
+from shortcut.report_store import (
+    CONDITIONS,
+    Condition,
+    Report,
+    ReportGroup,
+    TargetKind,
+)
 from shortcut.tools.astar import Route
 
 __all__ = [
     "NodeSummary",
+    "EdgeSummary",
     "RoutePreference",
     "RouteRequest",
     "RouteStep",
     "RouteResponse",
+    "ReportRequest",
+    "ReportSummary",
+    "ReportGroupSummary",
+    "ReviewResult",
 ]
 
 
@@ -75,6 +87,10 @@ class NodeSummary(BaseModel):
     )
     building: str = Field(description="Which building this node is in, e.g. 'Hive'.")
     floor: str = Field(description="Which floor this node is on, e.g. 'B5'.")
+    condition: str | None = Field(
+        default=None,
+        description="A known problem here, e.g. 'crowded', from an approved report.",
+    )
 
     @classmethod
     def from_node(cls, node: Node) -> "NodeSummary":
@@ -84,6 +100,50 @@ class NodeSummary(BaseModel):
             name=node.name,
             building=node.building,
             floor=node.floor,
+            condition=node.condition,
+        )
+
+
+class EdgeSummary(BaseModel):
+    """One corridor, stair or lift, for picking when reporting a problem.
+
+    A route response already describes the edges it uses; this is the list to
+    choose from when nobody is mid-route, such as reporting a corridor you
+    walked past.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={
+            "example": {
+                "id": "Hive_B5_002",
+                "from_id": "Hive_B5_A",
+                "to_id": "Hive_B5_G",
+                "label": "Staircase 1 → Courtyard",
+                "blocked": False,
+                "condition": None,
+            }
+        },
+    )
+
+    id: str = Field(description="Edge id, used as a report's target_id.")
+    from_id: str = Field(description="Node id at one end.")
+    to_id: str = Field(description="Node id at the other end.")
+    label: str = Field(description="Readable name for both ends, for display.")
+    blocked: bool = Field(default=False, description="True if currently closed.")
+    condition: str | None = Field(
+        default=None, description="A known problem here, from an approved report."
+    )
+
+    @classmethod
+    def from_edge(cls, edge: Edge, label: str) -> "EdgeSummary":
+        return cls(
+            id=edge.id,
+            from_id=edge.from_id,
+            to_id=edge.to_id,
+            label=label,
+            blocked=edge.blocked,
+            condition=edge.condition,
         )
 
 
@@ -205,6 +265,14 @@ class RouteStep(BaseModel):
     stairs: bool = Field(default=False, description="True if this step uses stairs.")
     lift: bool = Field(default=False, description="True if this step uses a lift.")
     covered: bool = Field(default=False, description="True if this step is sheltered.")
+    condition: str | None = Field(
+        default=None,
+        description=(
+            "A known problem on this stretch, e.g. 'crowded', from an approved "
+            "report. Advisory: anything that actually blocks the way is routed "
+            "around instead of reported here."
+        ),
+    )
 
 
 class RouteResponse(BaseModel):
@@ -328,6 +396,7 @@ class RouteResponse(BaseModel):
                     stairs=edge.stairs,
                     lift=edge.lift,
                     covered=edge.covered,
+                    condition=edge.condition,
                 )
             )
 
@@ -341,3 +410,141 @@ class RouteResponse(BaseModel):
             uses_lift=route.uses_lift,
             fully_sheltered=route.fully_sheltered,
         )
+
+
+# --------------------------------------------------------------------------
+# Reports
+# --------------------------------------------------------------------------
+
+
+class ReportRequest(BaseModel):
+    """Someone telling us something is wrong at a place on the map.
+
+    The place is chosen from the map, never typed: ``target_id`` must be a
+    node or edge id the graph already knows. That is what keeps two people
+    reporting the same problem matchable without having to reconcile spelling.
+    """
+
+    model_config = ConfigDict(
+        str_strip_whitespace=True,
+        extra="forbid",
+        json_schema_extra={
+            "example": {
+                "target_kind": "edge",
+                "target_id": "Hive_B5_002",
+                "condition": "blocked",
+                "notes": "Barriers across the corridor by the lockers.",
+            }
+        },
+    )
+
+    target_kind: TargetKind = Field(
+        description="Whether target_id names a node (a place) or an edge (a stretch)."
+    )
+    target_id: str = Field(
+        min_length=1,
+        max_length=100,
+        description="Id of the node or edge the report is about.",
+    )
+    condition: Condition = Field(
+        description=f"What is wrong. One of: {', '.join(CONDITIONS)}."
+    )
+    notes: str = Field(
+        default="",
+        max_length=500,
+        description="Optional free text: exactly where, and anything else useful.",
+    )
+
+
+class ReportSummary(BaseModel):
+    """One individual submission, exactly as it was sent.
+
+    Every submission is kept and listed separately, so it is always possible
+    to check what people actually reported rather than only a total.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    target_kind: TargetKind
+    target_id: str
+    condition: Condition
+    notes: str
+    status: str
+    submitted_at: str
+    reviewed_at: str | None = None
+    photo_id: str | None = None
+
+    @classmethod
+    def from_report(cls, report: Report) -> "ReportSummary":
+        return cls(
+            id=report.id,
+            target_kind=report.target_kind,
+            target_id=report.target_id,
+            condition=report.condition,
+            notes=report.notes,
+            status=report.status,
+            submitted_at=report.submitted_at,
+            reviewed_at=report.reviewed_at,
+            photo_id=report.photo_id,
+        )
+
+
+class ReportGroupSummary(BaseModel):
+    """Everyone who reported the same problem, as one row for review."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    key: str = Field(description="Id for this group, used to approve or reject it.")
+    target_kind: TargetKind
+    target_id: str
+    target_name: str = Field(
+        description="Readable name of the place, for showing in the queue."
+    )
+    condition: Condition
+    confirmations: int = Field(
+        ge=1, description="How many people reported this same problem."
+    )
+    report_ids: list[str]
+    notes: list[str] = Field(description="The notes people left, oldest first.")
+    blocks_routes: bool = Field(
+        description="Whether approving this would close the place to routing."
+    )
+    first_submitted_at: str
+    latest_submitted_at: str
+
+    @classmethod
+    def from_group(
+        cls, group: ReportGroup, target_name: str
+    ) -> "ReportGroupSummary":
+        return cls(
+            key=group.key,
+            target_kind=group.target_kind,
+            target_id=group.target_id,
+            target_name=target_name,
+            condition=group.condition,
+            confirmations=group.confirmations,
+            report_ids=list(group.report_ids),
+            notes=list(group.notes),
+            blocks_routes=group.blocks_routes,
+            first_submitted_at=group.first_submitted_at,
+            latest_submitted_at=group.latest_submitted_at,
+        )
+
+
+class ReviewResult(BaseModel):
+    """What an approve or reject actually did."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    key: str
+    status: str = Field(description="The state the reports were moved to.")
+    reports_updated: int = Field(
+        ge=0, description="How many pending reports this changed."
+    )
+    routing_changed: bool = Field(
+        description=(
+            "True if the map used for routing changed as a result. Approving "
+            "a crowded report does not change routing, only warns."
+        )
+    )

@@ -18,3 +18,8 @@ logs/
 results/
 .DS_Store
 Thumbs.db
+# Runtime state, created on demand: this machine's reports and the map
+# changes approved from them. The surveyed graph in data/campus_graph.json
+# stays the committed source of truth.
+data/reports.json
+data/graph_overrides.json
