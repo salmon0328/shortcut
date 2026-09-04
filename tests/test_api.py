@@ -25,15 +25,16 @@ from fastapi.testclient import TestClient
 from shortcut.api import DEV_ALLOWED_ORIGINS, app, get_graph
 from shortcut.graph_store import CampusGraph, load_graph
 
-# The route under test, taken from the real graph:
-#   Hive_B5_A --(Hive_B5_017, stairs)-> Hive_B4_A
-#              --(Hive_B4_002)-> Hive_B4_F --(Hive_B4_007)-> Hive_B4_E
+# The route under test, taken from the real graph. Only Hive's B5 floor is
+# surveyed right now - B4 was deliberately removed so testing could start
+# against a small, real, single-floor subset:
+#   Hive_B5_A --(Hive_B5_002)-> Hive_B5_G --(Hive_B5_007)-> Hive_B5_C
 ORIGIN = "Hive_B5_A"
-DESTINATION = "Hive_B4_E"
-EXPECTED_NODES = ["Hive_B5_A", "Hive_B4_A", "Hive_B4_F", "Hive_B4_E"]
-EXPECTED_EDGES = ["Hive_B5_017", "Hive_B4_002", "Hive_B4_007"]
-EXPECTED_SECONDS = 36.0  # 20 + 8 + 8
-EXPECTED_METRES = 37.4  # 15.0 + 11.2 + 11.2
+DESTINATION = "Hive_B5_C"
+EXPECTED_NODES = ["Hive_B5_A", "Hive_B5_G", "Hive_B5_C"]
+EXPECTED_EDGES = ["Hive_B5_002", "Hive_B5_007"]
+EXPECTED_SECONDS = 29.0  # 21 + 8
+EXPECTED_METRES = 40.6  # 29.4 + 11.2
 
 
 # --------------------------------------------------------------------------
@@ -187,8 +188,8 @@ def test_a_known_node_carries_its_real_name_and_building(
         "x": None,
         "y": None,
     }
-    assert by_id[DESTINATION]["name"] == "Side Entrance"
-    assert by_id[DESTINATION]["floor"] == "B4"
+    assert by_id[DESTINATION]["name"] == "Staircase 3"
+    assert by_id[DESTINATION]["floor"] == "B5"
 
 
 def test_nodes_response_is_a_plain_list_not_wrapped_in_an_object(
@@ -316,10 +317,13 @@ def test_route_total_distance_is_correct(client: TestClient) -> None:
 
 
 def test_route_reports_stairs_but_not_lift(client: TestClient) -> None:
-    """Hive_B5_017 is the staircase between floors B5 and B4."""
+    """With only Hive's B5 floor surveyed, no corridor crosses floors, so
+    nothing uses stairs or a lift - those flags only ever lived on the
+    corridors that used to. See the preferences section below for coverage
+    of the flags themselves working, against a small synthetic graph."""
     body = post_route(client, ORIGIN, DESTINATION).json()
 
-    assert body["uses_stairs"] is True
+    assert body["uses_stairs"] is False
     assert body["uses_lift"] is False
 
 
@@ -385,7 +389,7 @@ def test_there_is_one_step_per_edge(client: TestClient) -> None:
 def test_steps_are_numbered_from_one_in_order(client: TestClient) -> None:
     steps = post_route(client, ORIGIN, DESTINATION).json()["steps"]
 
-    assert [step["step"] for step in steps] == [1, 2, 3]
+    assert [step["step"] for step in steps] == [1, 2]
 
 
 def test_steps_join_up_into_a_continuous_walk(client: TestClient) -> None:
@@ -419,36 +423,6 @@ def test_step_numbers_add_up_to_the_route_totals(client: TestClient) -> None:
     )
 
 
-def test_the_stairs_step_is_described_as_stairs(client: TestClient) -> None:
-    steps = post_route(client, ORIGIN, DESTINATION).json()["steps"]
-
-    stairs_steps = [step for step in steps if step["stairs"]]
-    assert len(stairs_steps) == 1
-    assert "stairs" in stairs_steps[0]["instruction"].lower()
-    assert "B4" in stairs_steps[0]["instruction"]
-
-
-def test_the_lift_step_is_described_as_a_lift(client: TestClient) -> None:
-    steps = post_route_with(client, preference="prefer_lift").json()["steps"]
-
-    lift_steps = [step for step in steps if step["lift"]]
-    assert len(lift_steps) == 1
-    assert "lift" in lift_steps[0]["instruction"].lower()
-
-
-def test_directions_never_claim_up_or_down(client: TestClient) -> None:
-    """Floors are labels like 'B4'; nothing says which way they stack.
-
-    Wording that guessed would be wrong half the time, so it must not appear.
-    """
-    steps = post_route_with(client, preference="prefer_lift").json()["steps"]
-
-    for step in steps:
-        words = f"{step['instruction']} {step['detail']}".lower().split()
-        assert "up" not in words
-        assert "down" not in words
-
-
 def test_a_route_to_the_same_node_has_no_steps(client: TestClient) -> None:
     body = post_route(client, ORIGIN, ORIGIN).json()
 
@@ -456,12 +430,136 @@ def test_a_route_to_the_same_node_has_no_steps(client: TestClient) -> None:
 
 
 # --------------------------------------------------------------------------
-# POST /route: preferences and restrictions
+# Stairs and lifts, on a small synthetic graph
 # --------------------------------------------------------------------------
 #
-# The default route from Hive_B5_A to Hive_B4_E takes the staircase: 4 nodes,
-# 36 s. Avoiding stairs forces the longer way round via the lift: 8 nodes,
-# 67 s. Those two shapes are what these tests tell apart.
+# Only Hive's B5 floor is surveyed right now, and B5 alone has no corridor
+# that climbs anything - those flags only ever lived on the corridors that
+# used to cross floors. So the stairs/lift *preferences* need something real
+# to choose between, which this graph exists to provide: two isolated test
+# places joined only by a staircase and a lift, mirroring what a real
+# multi-floor link will look like once more of the building is surveyed.
+
+STAIRS_OR_LIFT_ORIGIN = "Test_Upper"
+STAIRS_OR_LIFT_DESTINATION = "Test_Lower"
+STAIRS_SECONDS = 20.0
+LIFT_SECONDS = 45.0
+
+
+@pytest.fixture
+def stairs_or_lift_client(graph_path: Path, tmp_path: Path) -> Iterator[TestClient]:
+    data = copy.deepcopy(json.loads(graph_path.read_text(encoding="utf-8")))
+    data["nodes"] += [
+        {
+            "id": STAIRS_OR_LIFT_ORIGIN,
+            "name": "Test Upper",
+            "building": "Test",
+            "floor": "1",
+            "type": "junction",
+        },
+        {
+            "id": STAIRS_OR_LIFT_DESTINATION,
+            "name": "Test Lower",
+            "building": "Test",
+            "floor": "2",
+            "type": "junction",
+        },
+    ]
+    data["edges"] += [
+        {
+            "id": "Test_Stairs",
+            "from": STAIRS_OR_LIFT_ORIGIN,
+            "to": STAIRS_OR_LIFT_DESTINATION,
+            "distance_m": 15,
+            "walk_seconds": STAIRS_SECONDS,
+            "covered": True,
+            "stairs": True,
+            "lift": False,
+            "blocked": False,
+        },
+        {
+            "id": "Test_Lift",
+            "from": STAIRS_OR_LIFT_ORIGIN,
+            "to": STAIRS_OR_LIFT_DESTINATION,
+            "distance_m": 15,
+            "walk_seconds": LIFT_SECONDS,
+            "covered": True,
+            "stairs": False,
+            "lift": True,
+            "blocked": False,
+        },
+    ]
+    temporary_file = tmp_path / "stairs_or_lift.json"
+    temporary_file.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    graph = load_graph(temporary_file)
+
+    app.dependency_overrides[get_graph] = lambda: graph
+    with TestClient(app) as test_client:
+        yield test_client
+    app.dependency_overrides.clear()
+
+
+def post_stairs_or_lift(client: TestClient, **options):
+    payload = {
+        "origin": STAIRS_OR_LIFT_ORIGIN,
+        "destination": STAIRS_OR_LIFT_DESTINATION,
+        **options,
+    }
+    return client.post("/route", json=payload)
+
+
+def test_the_default_route_takes_the_stairs(
+    stairs_or_lift_client: TestClient,
+) -> None:
+    """Fastest picks the quicker of the two: 20 s beats 45 s."""
+    body = post_stairs_or_lift(stairs_or_lift_client).json()
+
+    assert body["uses_stairs"] is True
+    assert body["uses_lift"] is False
+
+
+def test_the_stairs_step_is_described_as_stairs(
+    stairs_or_lift_client: TestClient,
+) -> None:
+    steps = post_stairs_or_lift(stairs_or_lift_client).json()["steps"]
+
+    stairs_steps = [step for step in steps if step["stairs"]]
+    assert len(stairs_steps) == 1
+    assert "stairs" in stairs_steps[0]["instruction"].lower()
+
+
+def test_the_lift_step_is_described_as_a_lift(
+    stairs_or_lift_client: TestClient,
+) -> None:
+    steps = post_stairs_or_lift(
+        stairs_or_lift_client, preference="prefer_lift"
+    ).json()["steps"]
+
+    lift_steps = [step for step in steps if step["lift"]]
+    assert len(lift_steps) == 1
+    assert "lift" in lift_steps[0]["instruction"].lower()
+
+
+def test_directions_never_claim_up_or_down(
+    stairs_or_lift_client: TestClient,
+) -> None:
+    """Floors are labels like '1'/'2'; nothing says which way they stack.
+
+    Wording that guessed would be wrong half the time, so it must not appear.
+    """
+    steps = post_stairs_or_lift(
+        stairs_or_lift_client, preference="prefer_lift"
+    ).json()["steps"]
+
+    for step in steps:
+        words = f"{step['instruction']} {step['detail']}".lower().split()
+        assert "up" not in words
+        assert "down" not in words
+
+
+# --------------------------------------------------------------------------
+# POST /route: preferences and restrictions
+# --------------------------------------------------------------------------
 
 
 def post_route_with(client: TestClient, **options):
@@ -485,52 +583,64 @@ def test_defaults_match_an_explicit_fastest_request(client: TestClient) -> None:
 
 
 def test_prefer_lift_takes_the_lift_instead_of_the_stairs(
-    client: TestClient,
+    stairs_or_lift_client: TestClient,
 ) -> None:
-    body = post_route_with(client, preference="prefer_lift").json()
+    body = post_stairs_or_lift(stairs_or_lift_client, preference="prefer_lift").json()
 
     assert body["uses_lift"] is True
     assert body["uses_stairs"] is False
     # Avoiding the stairs is a longer walk; that is the trade being made.
-    assert body["total_walk_seconds"] > EXPECTED_SECONDS
+    assert body["total_walk_seconds"] > STAIRS_SECONDS
 
 
-def test_prefer_lift_still_reports_honest_totals(client: TestClient) -> None:
+def test_prefer_lift_still_reports_honest_totals(
+    stairs_or_lift_client: TestClient,
+) -> None:
     """The stairs penalty steers the search; it must not leak into the totals.
 
     ``total_walk_seconds`` is summed from the edges themselves, so it stays a
     real walking time rather than the inflated score used to compare routes.
     """
-    body = post_route_with(client, preference="prefer_lift").json()
+    body = post_stairs_or_lift(stairs_or_lift_client, preference="prefer_lift").json()
 
-    assert body["total_walk_seconds"] == pytest.approx(67.0)
+    assert body["total_walk_seconds"] == pytest.approx(LIFT_SECONDS)
 
 
-def test_refusing_stairs_forces_the_lift_route(client: TestClient) -> None:
-    body = post_route_with(client, allow_stairs=False).json()
+def test_refusing_stairs_forces_the_lift_route(
+    stairs_or_lift_client: TestClient,
+) -> None:
+    body = post_stairs_or_lift(stairs_or_lift_client, allow_stairs=False).json()
 
     assert body["uses_stairs"] is False
     assert body["uses_lift"] is True
 
 
-def test_refusing_the_lift_keeps_the_staircase_route(client: TestClient) -> None:
-    body = post_route_with(client, allow_lift=False).json()
+def test_refusing_the_lift_keeps_the_staircase_route(
+    stairs_or_lift_client: TestClient,
+) -> None:
+    body = post_stairs_or_lift(stairs_or_lift_client, allow_lift=False).json()
 
     assert body["uses_lift"] is False
-    assert body["nodes"] == EXPECTED_NODES
+    assert body["nodes"] == [STAIRS_OR_LIFT_ORIGIN, STAIRS_OR_LIFT_DESTINATION]
 
 
-def test_no_route_when_both_stairs_and_lift_are_refused(client: TestClient) -> None:
-    """Origin and destination are on different floors, so something must give."""
-    response = post_route_with(client, allow_stairs=False, allow_lift=False)
+def test_no_route_when_both_stairs_and_lift_are_refused(
+    stairs_or_lift_client: TestClient,
+) -> None:
+    """The two test places are joined only by a staircase and a lift."""
+    response = post_stairs_or_lift(
+        stairs_or_lift_client, allow_stairs=False, allow_lift=False
+    )
 
     assert response.status_code == 404
 
 
-def test_the_404_says_which_restrictions_caused_it(client: TestClient) -> None:
+def test_the_404_says_which_restrictions_caused_it(
+    stairs_or_lift_client: TestClient,
+) -> None:
     """'No route' alone is not actionable; the user needs to know why."""
-    detail = post_route_with(
-        client, allow_stairs=False, allow_lift=False
+    detail = post_stairs_or_lift(
+        stairs_or_lift_client, allow_stairs=False, allow_lift=False
     ).json()["detail"]
 
     assert "no stairs" in detail
@@ -751,10 +861,16 @@ def test_cors_does_not_change_the_route_response_body(client: TestClient) -> Non
 # --------------------------------------------------------------------------
 
 
-def test_real_graph_file_is_never_modified(graph_path: Path) -> None:
-    """Guard for requirement 10: tests must not rewrite data/campus_graph.json."""
-    data = json.loads(graph_path.read_text(encoding="utf-8"))
+def test_real_graph_file_is_never_modified(
+    graph_path: Path, graph_bytes_at_session_start: bytes
+) -> None:
+    """Guard for requirement 10: tests must not rewrite data/campus_graph.json.
 
-    assert len(data["nodes"]) == 17
-    assert len(data["edges"]) == 27
-    assert all(edge["blocked"] is False for edge in data["edges"])
+    Compares against a snapshot taken before any test ran, not a hardcoded
+    count: the graph is real survey data that keeps growing, so a fixed
+    node/edge number would go stale the moment someone surveys a new place.
+    """
+    assert graph_path.read_bytes() == graph_bytes_at_session_start
+
+    data = json.loads(graph_path.read_text(encoding="utf-8"))
+    assert all(edge.get("blocked", False) is False for edge in data["edges"])

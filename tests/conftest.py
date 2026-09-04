@@ -36,3 +36,15 @@ def graph(graph_path: Path) -> CampusGraph:
     Loaded per test, so nothing one test does can leak into another.
     """
     return load_graph(graph_path)
+
+
+@pytest.fixture(scope="session")
+def graph_bytes_at_session_start(graph_path: Path) -> bytes:
+    """The real graph file's exact content, captured once before any test runs.
+
+    Used only to prove the file is untouched by the end of the run. Deliberately
+    not a node/edge count: the graph is real survey data that keeps growing as
+    more of the building is surveyed, so a hardcoded number goes stale the
+    moment someone adds a node - a byte-for-byte snapshot never does.
+    """
+    return graph_path.read_bytes()

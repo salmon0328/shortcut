@@ -226,14 +226,14 @@ def test_a_link_between_unknown_places_is_refused(client: TestClient) -> None:
 def test_a_standalone_link_changes_routing(client: TestClient) -> None:
     """A new shortcut should be used when it really is shorter."""
     before = client.post(
-        "/route", json={"origin": "Hive_B5_A", "destination": "Hive_B4_H"}
+        "/route", json={"origin": "Hive_B5_A", "destination": "Hive_B5_F"}
     ).json()
 
     client.post(
         "/admin/edges",
         json={
             "from_id": "Hive_B5_A",
-            "to_id": "Hive_B4_H",
+            "to_id": "Hive_B5_F",
             "distance_m": 1.0,
             "walk_seconds": 1.0,
             "covered": True,
@@ -241,10 +241,10 @@ def test_a_standalone_link_changes_routing(client: TestClient) -> None:
     )
 
     after = client.post(
-        "/route", json={"origin": "Hive_B5_A", "destination": "Hive_B4_H"}
+        "/route", json={"origin": "Hive_B5_A", "destination": "Hive_B5_F"}
     ).json()
     assert after["total_walk_seconds"] < before["total_walk_seconds"]
-    assert after["nodes"] == ["Hive_B5_A", "Hive_B4_H"]
+    assert after["nodes"] == ["Hive_B5_A", "Hive_B5_F"]
 
 
 def test_a_link_can_be_added_between_two_existing_places(

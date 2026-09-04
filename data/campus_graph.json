@@ -69,55 +69,6 @@
       "building": "Hive",
       "floor": "B4",
       "type": "stairs"
-    },
-    {
-      "id": "Hive_B4_B",
-      "name": "Lift",
-      "building": "Hive",
-      "floor": "B4",
-      "type": "lift"
-    },
-    {
-      "id": "Hive_B4_C",
-      "name": "Staircase 3",
-      "building": "Hive",
-      "floor": "B4",
-      "type": "stairs"
-    },
-    {
-      "id": "Hive_B4_D",
-      "name": "Staircase 2",
-      "building": "Hive",
-      "floor": "B4",
-      "type": "stairs"
-    },
-    {
-      "id": "Hive_B4_E",
-      "name": "Side Entrance",
-      "building": "Hive",
-      "floor": "B4",
-      "type": "junction"
-    },
-    {
-      "id": "Hive_B4_F",
-      "name": "Back Entrance",
-      "building": "Hive",
-      "floor": "B4",
-      "type": "junction"
-    },
-    {
-      "id": "Hive_B4_G",
-      "name": "Main Staircase",
-      "building": "Hive",
-      "floor": "B4",
-      "type": "stairs"
-    },
-    {
-      "id": "Hive_B4_H",
-      "name": "Lift Lobby",
-      "building": "Hive",
-      "floor": "B4",
-      "type": "junction"
     }
   ],
   "edges": [
@@ -276,147 +227,18 @@
       "blocked": false
     },
     {
-      "id": "Hive_B5_015",
-      "from": "Hive_B5_B",
-      "to": "Hive_B4_B",
-      "distance_m": 0,
-      "walk_seconds": 3,
-      "covered": true,
-      "stairs": false,
-      "lift": true,
-      "blocked": false
-    },
-    {
-      "id": "Hive_B5_016",
-      "from": "Hive_B5_I",
-      "to": "Hive_B4_G",
-      "distance_m": 15,
-      "walk_seconds": 20,
-      "covered": true,
-      "stairs": true,
-      "lift": false,
-      "blocked": false
-    },
-    {
-      "id": "Hive_B5_017",
-      "from": "Hive_B5_A",
-      "to": "Hive_B4_A",
-      "distance_m": 15,
-      "walk_seconds": 20,
-      "covered": true,
-      "stairs": true,
-      "lift": false,
-      "blocked": false
-    },
-    {
-      "id": "Hive_B5_018",
-      "from": "Hive_B5_E",
-      "to": "Hive_B4_D",
-      "distance_m": 15,
-      "walk_seconds": 20,
-      "covered": true,
-      "stairs": true,
-      "lift": false,
-      "blocked": false
-    },
-    {
-      "id": "Hive_B5_019",
-      "from": "Hive_B5_C",
-      "to": "Hive_B4_C",
-      "distance_m": 15,
-      "walk_seconds": 20,
-      "covered": true,
-      "stairs": true,
-      "lift": false,
-      "blocked": false
-    },
-    {
-      "id": "Hive_B4_001",
+      "id": "Hive_B4_A--Hive_B5_A",
       "from": "Hive_B4_A",
-      "to": "Hive_B4_H",
-      "distance_m": 30.8,
-      "walk_seconds": 22,
+      "to": "Hive_B5_A",
+      "distance_m": 15.0,
+      "walk_seconds": 20.0,
       "covered": true,
-      "stairs": false,
+      "stairs": true,
       "lift": false,
-      "blocked": false
-    },
-    {
-      "id": "Hive_B4_002",
-      "from": "Hive_B4_A",
-      "to": "Hive_B4_F",
-      "distance_m": 11.2,
-      "walk_seconds": 8,
-      "covered": true,
-      "stairs": false,
-      "lift": false,
-      "blocked": false
-    },
-    {
-      "id": "Hive_B4_003",
-      "from": "Hive_B4_B",
-      "to": "Hive_B4_H",
-      "distance_m": 5,
-      "walk_seconds": 4,
-      "covered": true,
-      "stairs": false,
-      "lift": false,
-      "blocked": false
-    },
-    {
-      "id": "Hive_B4_004",
-      "from": "Hive_B4_C",
-      "to": "Hive_B4_D",
-      "distance_m": 25.2,
-      "walk_seconds": 18,
-      "covered": true,
-      "stairs": false,
-      "lift": false,
-      "blocked": false
-    },
-    {
-      "id": "Hive_B4_005",
-      "from": "Hive_B4_C",
-      "to": "Hive_B4_H",
-      "distance_m": 32.2,
-      "walk_seconds": 23,
-      "covered": true,
-      "stairs": false,
-      "lift": false,
-      "blocked": false
-    },
-    {
-      "id": "Hive_B4_006",
-      "from": "Hive_B4_D",
-      "to": "Hive_B4_E",
-      "distance_m": 11.2,
-      "walk_seconds": 8,
-      "covered": true,
-      "stairs": false,
-      "lift": false,
-      "blocked": false
-    },
-    {
-      "id": "Hive_B4_007",
-      "from": "Hive_B4_E",
-      "to": "Hive_B4_F",
-      "distance_m": 11.2,
-      "walk_seconds": 8,
-      "covered": true,
-      "stairs": false,
-      "lift": false,
-      "blocked": false
-    },
-    {
-      "id": "Hive_B4_008",
-      "from": "Hive_B4_G",
-      "to": "Hive_B4_H",
-      "distance_m": 8,
-      "walk_seconds": 9,
-      "covered": true,
-      "stairs": false,
-      "lift": false,
-      "blocked": false
+      "shuttle": false,
+      "wait_seconds": 0.0,
+      "blocked": false,
+      "one_way": false
     }
   ]
 }
