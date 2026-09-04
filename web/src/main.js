@@ -9,6 +9,7 @@ import "./style.css";
 import { refreshQueue } from "./admin.js";
 import { refreshMapEditor } from "./adminMap.js";
 import { loadReferenceData } from "./data.js";
+import { refreshPending } from "./pending.js";
 import { currentStep, showPlanError, showPlanLoading, stopPlanLoading } from "./plan.js";
 import { prefillFromStep, resetForm } from "./report.js";
 
@@ -72,6 +73,7 @@ const adminTabs = {
   "add-place": document.querySelector("#admin-tab-add-place"),
   "add-link": document.querySelector("#admin-tab-add-link"),
   edit: document.querySelector("#admin-tab-edit"),
+  pending: document.querySelector("#admin-tab-pending"),
 };
 
 function showAdminTab(name) {
@@ -85,6 +87,8 @@ function showAdminTab(name) {
   // Every panel reads the map, which another one may have just changed.
   if (name === "reports") {
     refreshQueue();
+  } else if (name === "pending") {
+    refreshPending();
   } else {
     refreshMapEditor();
   }

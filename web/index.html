@@ -270,6 +270,7 @@
           <button type="button" class="tab" data-tab="add-place">Add place</button>
           <button type="button" class="tab" data-tab="add-link">Add link</button>
           <button type="button" class="tab" data-tab="edit">Edit</button>
+          <button type="button" class="tab" data-tab="pending">Pending</button>
         </div>
 
         <!-- ---------------------- reports tab ---------------------- -->
@@ -527,6 +528,44 @@
                 </button>
               </form>
             </div>
+          </div>
+        </div>
+
+        <!-- ----------------------- pending ------------------------ -->
+        <div id="admin-tab-pending" hidden>
+          <div class="card">
+            <h2>
+              Not yet in the survey
+              <span id="pending-count-map" class="count-pill">0</span>
+            </h2>
+            <p class="hint">
+              Everything changed since <code>campus_graph.json</code> was last
+              updated. Surveyed work belongs in that file, where it is version
+              controlled; conditions from reports stay here, because they
+              describe now rather than the building.
+            </p>
+            <button type="button" id="refresh-pending" class="secondary">
+              Refresh
+            </button>
+          </div>
+
+          <p id="pending-status" class="status" hidden></p>
+          <div id="pending-list"></div>
+
+          <div class="card graduate-note">
+            <h3>Moving these into the survey</h3>
+            <p class="hint">
+              Done from a terminal, not this screen, so that a change to a
+              version controlled file is reviewed as a diff before it is kept.
+            </p>
+            <pre class="command"><code>python scripts/graduate_overrides.py
+python scripts/graduate_overrides.py --write
+git diff data/campus_graph.json</code></pre>
+            <p class="hint">
+              The first command only reports. The second rewrites the survey and
+              takes the graduated entries out of the overrides file, leaving
+              live conditions alone.
+            </p>
           </div>
         </div>
       </section>

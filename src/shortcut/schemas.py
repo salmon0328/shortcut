@@ -17,7 +17,7 @@ No AI, no Bedrock, no AWS: this layer only validates data.
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -55,6 +55,8 @@ __all__ = [
     "FloorplanCalibration",
     "RouteOption",
     "RouteChoices",
+    "PendingChange",
+    "PendingChanges",
 ]
 
 
@@ -1006,3 +1008,54 @@ class RouteChoices(BaseModel):
 
     primary: RouteOption
     alternatives: list[RouteOption] = Field(default_factory=list)
+
+
+# --------------------------------------------------------------------------
+# What is waiting to be folded into the survey
+# --------------------------------------------------------------------------
+
+
+class PendingChange(BaseModel):
+    """One thing sitting in the overrides file, not yet in the survey."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["node", "edge"]
+    change: Literal["added", "edited"] = Field(
+        description="Whether this is something new, or a change to surveyed data."
+    )
+    id: str
+    label: str = Field(description="Readable name, for showing in a list.")
+    fields: dict[str, Any] = Field(
+        description="What was added or changed, field by field."
+    )
+    graduating_fields: list[str] = Field(
+        description="Fields that would move into campus_graph.json."
+    )
+    live_fields: list[str] = Field(
+        description=(
+            "Fields that would stay in the overrides file, because they "
+            "describe a passing condition rather than the building."
+        )
+    )
+
+
+class PendingChanges(BaseModel):
+    """Everything in the overrides file, ready to be reviewed before it graduates.
+
+    Read-only on purpose. Moving these into the survey is done by running
+    ``scripts/graduate_overrides.py``, so that the change to a version
+    controlled file is a deliberate act reviewed as a git diff, rather than a
+    button pressed while browsing.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    changes: list[PendingChange]
+    total: int = Field(ge=0, description="How many things have been changed at all.")
+    graduating: int = Field(
+        ge=0, description="How many carry something the survey should keep."
+    )
+    live_only: int = Field(
+        ge=0, description="How many are only a passing condition, and would stay."
+    )
