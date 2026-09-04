@@ -215,6 +215,7 @@ def test_route_response_matches_the_schema(client: TestClient) -> None:
     assert set(body) == {
         "nodes",
         "edges",
+        "steps",
         "total_distance_m",
         "total_walk_seconds",
         "uses_stairs",
@@ -302,6 +303,91 @@ def test_route_to_the_same_node_is_empty_but_valid(client: TestClient) -> None:
     assert body["edges"] == []
     assert body["total_walk_seconds"] == 0
     assert body["total_distance_m"] == 0
+
+
+# --------------------------------------------------------------------------
+# POST /route: the step-by-step directions
+# --------------------------------------------------------------------------
+
+
+def test_there_is_one_step_per_edge(client: TestClient) -> None:
+    body = post_route(client, ORIGIN, DESTINATION).json()
+
+    assert len(body["steps"]) == len(body["edges"])
+    assert len(body["steps"]) == len(body["nodes"]) - 1
+
+
+def test_steps_are_numbered_from_one_in_order(client: TestClient) -> None:
+    steps = post_route(client, ORIGIN, DESTINATION).json()["steps"]
+
+    assert [step["step"] for step in steps] == [1, 2, 3]
+
+
+def test_steps_join_up_into_a_continuous_walk(client: TestClient) -> None:
+    """Each step must start where the previous one ended."""
+    body = post_route(client, ORIGIN, DESTINATION).json()
+    steps = body["steps"]
+
+    assert steps[0]["from_id"] == body["nodes"][0]
+    assert steps[-1]["to_id"] == body["nodes"][-1]
+    for earlier, later in zip(steps, steps[1:]):
+        assert earlier["to_id"] == later["from_id"]
+
+
+def test_every_step_carries_text(client: TestClient) -> None:
+    """No step may be blank, even though no directions are written yet."""
+    steps = post_route(client, ORIGIN, DESTINATION).json()["steps"]
+
+    for step in steps:
+        assert step["instruction"].strip()
+        assert step["detail"].strip()
+
+
+def test_step_numbers_add_up_to_the_route_totals(client: TestClient) -> None:
+    body = post_route(client, ORIGIN, DESTINATION).json()
+
+    assert sum(s["distance_m"] for s in body["steps"]) == pytest.approx(
+        body["total_distance_m"]
+    )
+    assert sum(s["walk_seconds"] for s in body["steps"]) == pytest.approx(
+        body["total_walk_seconds"]
+    )
+
+
+def test_the_stairs_step_is_described_as_stairs(client: TestClient) -> None:
+    steps = post_route(client, ORIGIN, DESTINATION).json()["steps"]
+
+    stairs_steps = [step for step in steps if step["stairs"]]
+    assert len(stairs_steps) == 1
+    assert "stairs" in stairs_steps[0]["instruction"].lower()
+    assert "B4" in stairs_steps[0]["instruction"]
+
+
+def test_the_lift_step_is_described_as_a_lift(client: TestClient) -> None:
+    steps = post_route_with(client, preference="prefer_lift").json()["steps"]
+
+    lift_steps = [step for step in steps if step["lift"]]
+    assert len(lift_steps) == 1
+    assert "lift" in lift_steps[0]["instruction"].lower()
+
+
+def test_directions_never_claim_up_or_down(client: TestClient) -> None:
+    """Floors are labels like 'B4'; nothing says which way they stack.
+
+    Wording that guessed would be wrong half the time, so it must not appear.
+    """
+    steps = post_route_with(client, preference="prefer_lift").json()["steps"]
+
+    for step in steps:
+        words = f"{step['instruction']} {step['detail']}".lower().split()
+        assert "up" not in words
+        assert "down" not in words
+
+
+def test_a_route_to_the_same_node_has_no_steps(client: TestClient) -> None:
+    body = post_route(client, ORIGIN, ORIGIN).json()
+
+    assert body["steps"] == []
 
 
 # --------------------------------------------------------------------------

@@ -268,4 +268,4 @@ def post_route(
             ),
         ) from error
 
-    return RouteResponse.from_route(route)
+    return RouteResponse.from_route(route, graph)

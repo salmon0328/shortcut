@@ -20,10 +20,17 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from shortcut.graph_store import Node
+from shortcut.directions import step_text
+from shortcut.graph_store import CampusGraph, Node
 from shortcut.tools.astar import Route
 
-__all__ = ["NodeSummary", "RoutePreference", "RouteRequest", "RouteResponse"]
+__all__ = [
+    "NodeSummary",
+    "RoutePreference",
+    "RouteRequest",
+    "RouteStep",
+    "RouteResponse",
+]
 
 
 # How a caller wants a route scored. Anything outside this set is rejected by
@@ -158,6 +165,48 @@ class RouteRequest(BaseModel):
 # --------------------------------------------------------------------------
 
 
+class RouteStep(BaseModel):
+    """One leg of a route: walk this edge, from one node to the next.
+
+    Steps are what a turn-by-turn screen shows one at a time. Each carries its
+    own text and its own numbers, so the screen never has to add anything up
+    or cross-reference another response.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={
+            "example": {
+                "step": 1,
+                "edge_id": "Hive_B5_002",
+                "from_id": "Hive_B5_A",
+                "to_id": "Hive_B5_G",
+                "instruction": "Walk to Courtyard",
+                "detail": "From Staircase 1, walk about 29 m to Courtyard.",
+                "distance_m": 29.4,
+                "walk_seconds": 21.0,
+                "stairs": False,
+                "lift": False,
+                "covered": True,
+            }
+        },
+    )
+
+    step: int = Field(ge=1, description="Position in the route, starting at 1.")
+    edge_id: str = Field(description="Id of the edge being walked.")
+    from_id: str = Field(description="Node id this step starts at.")
+    to_id: str = Field(description="Node id this step ends at.")
+    instruction: str = Field(
+        description="Short heading for the step, e.g. 'Take the lift to Level B4'."
+    )
+    detail: str = Field(description="Longer description of what to do.")
+    distance_m: float = Field(ge=0, description="Distance walked in this step.")
+    walk_seconds: float = Field(ge=0, description="Time this step takes.")
+    stairs: bool = Field(default=False, description="True if this step uses stairs.")
+    lift: bool = Field(default=False, description="True if this step uses a lift.")
+    covered: bool = Field(default=False, description="True if this step is sheltered.")
+
+
 class RouteResponse(BaseModel):
     """One successful route, ready to send back as JSON.
 
@@ -193,6 +242,13 @@ class RouteResponse(BaseModel):
         description=(
             "Edge ids walked, in order. Empty when the origin and the "
             "destination are the same node."
+        ),
+    )
+    steps: list[RouteStep] = Field(
+        default_factory=list,
+        description=(
+            "The same journey as 'edges', but with the text and numbers a "
+            "turn-by-turn screen needs. One entry per edge, in order."
         ),
     )
     total_distance_m: float = Field(
@@ -232,20 +288,53 @@ class RouteResponse(BaseModel):
                 f"A route with {len(self.nodes)} nodes needs {expected} edges, "
                 f"but got {len(self.edges)}."
             )
+        if self.steps and len(self.steps) != expected:
+            raise ValueError(
+                f"A route with {len(self.nodes)} nodes needs {expected} steps, "
+                f"but got {len(self.steps)}."
+            )
         return self
 
     @classmethod
-    def from_route(cls, route: Route) -> "RouteResponse":
+    def from_route(cls, route: Route, graph: CampusGraph) -> "RouteResponse":
         """Convert a :class:`shortcut.tools.astar.Route` into this API shape.
 
         The internal names (``node_ids``, ``edge_ids``, ``total_seconds``) are
         renamed here, and the tuples become lists. ``nodes_expanded`` is left
         out on purpose: it describes how hard the search worked, which is
         useful in tests but is not part of the public API.
+
+        The graph is needed to build ``steps``: a :class:`Route` records only
+        ids, while a step needs the edge's own numbers and the node names that
+        go into its wording.
         """
+        steps: list[RouteStep] = []
+        for index, edge_id in enumerate(route.edge_ids):
+            edge = graph.edge_by_id(edge_id)
+            from_node = graph.nodes[route.node_ids[index]]
+            to_node = graph.nodes[route.node_ids[index + 1]]
+            text = step_text(edge, from_node, to_node)
+
+            steps.append(
+                RouteStep(
+                    step=index + 1,
+                    edge_id=edge.id,
+                    from_id=from_node.id,
+                    to_id=to_node.id,
+                    instruction=text.instruction,
+                    detail=text.detail,
+                    distance_m=edge.distance_m,
+                    walk_seconds=edge.walk_seconds,
+                    stairs=edge.stairs,
+                    lift=edge.lift,
+                    covered=edge.covered,
+                )
+            )
+
         return cls(
             nodes=list(route.node_ids),
             edges=list(route.edge_ids),
+            steps=steps,
             total_distance_m=route.total_distance_m,
             total_walk_seconds=route.total_seconds,
             uses_stairs=route.uses_stairs,

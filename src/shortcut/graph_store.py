@@ -19,6 +19,7 @@ __all__ = [
     "GraphFileError",
     "GraphParseError",
     "GraphSchemaError",
+    "UnknownEdgeError",
     "UnknownNodeError",
     "Node",
     "Edge",
@@ -52,6 +53,19 @@ class GraphParseError(GraphError):
 
 class GraphSchemaError(GraphError):
     """The JSON parsed, but it is not shaped like a campus graph."""
+
+
+class UnknownEdgeError(GraphError, KeyError):
+    """An edge id was requested but does not exist."""
+
+    def __init__(self, edge_id: str) -> None:
+        message = f"Unknown edge id {edge_id!r}."
+        super().__init__(message)
+        self.edge_id = edge_id
+        self.message = message
+
+    def __str__(self) -> str:  # pragma: no cover - trivial
+        return self.message
 
 
 class UnknownNodeError(GraphError, KeyError):
@@ -119,6 +133,14 @@ class Edge:
     lift: bool = False
     blocked: bool = False
     one_way: bool = False
+    # Hand-written or (later) AI-written walking directions. Two fields
+    # because an edge is two-way and the wording depends on which way you are
+    # going: "forward" describes walking from_id -> to_id, "reverse" the other
+    # way. Both are optional; when absent, shortcut.directions falls back to a
+    # sentence generated from this edge's own numbers, so a step is never
+    # left without text.
+    directions_forward: str | None = None
+    directions_reverse: str | None = None
     extra: dict[str, Any] = field(default_factory=dict, repr=False)
 
     def other_end(self, node_id: NodeId) -> NodeId:
@@ -145,6 +167,9 @@ class CampusGraph:
     edges: list[Edge]
     # node id -> edges you can walk when standing on that node.
     adjacency: dict[NodeId, list[Edge]]
+    # edge id -> that edge. Built once at load time so describing a route does
+    # not rescan every edge for every step.
+    edges_by_id: dict[str, Edge] = field(default_factory=dict)
     source_path: Path | None = None
 
     # Thin convenience wrappers so callers can use either style:
@@ -161,6 +186,17 @@ class CampusGraph:
 
     def has_node(self, node_id: NodeId) -> bool:
         return node_id in self.nodes
+
+    def edge_by_id(self, edge_id: str) -> Edge:
+        """Return the edge with ``edge_id``.
+
+        Raises:
+            UnknownEdgeError: if no such edge exists.
+        """
+        try:
+            return self.edges_by_id[edge_id]
+        except KeyError:
+            raise UnknownEdgeError(edge_id) from None
 
     def __len__(self) -> int:
         return len(self.nodes)
@@ -208,6 +244,17 @@ def _optional_number(raw: dict[str, Any], key: str, where: str) -> float | None:
     return float(value)
 
 
+def _optional_text(raw: dict[str, Any], key: str, where: str) -> str | None:
+    """A free-text field that may be absent, but must be a string if present."""
+    if key not in raw or raw[key] is None:
+        return None
+    value = raw[key]
+    if not isinstance(value, str):
+        raise GraphSchemaError(f"{where}: field {key!r} must be a string, got {value!r}.")
+    stripped = value.strip()
+    return stripped or None
+
+
 def _optional_bool(raw: dict[str, Any], key: str, where: str, default: bool = False) -> bool:
     value = raw.get(key, default)
     if not isinstance(value, bool):
@@ -250,6 +297,7 @@ def _parse_edge(raw: Any, index: int) -> Edge:
     known_keys = {
         "id", "from", "to", "distance_m", "walk_seconds",
         "covered", "stairs", "lift", "blocked", "one_way",
+        "directions_forward", "directions_reverse",
     }
     return Edge(
         id=edge_id,
@@ -262,6 +310,8 @@ def _parse_edge(raw: Any, index: int) -> Edge:
         lift=_optional_bool(raw, "lift", where),
         blocked=_optional_bool(raw, "blocked", where),
         one_way=_optional_bool(raw, "one_way", where),
+        directions_forward=_optional_text(raw, "directions_forward", where),
+        directions_reverse=_optional_text(raw, "directions_reverse", where),
         extra={k: v for k, v in raw.items() if k not in known_keys},
     )
 
@@ -367,6 +417,7 @@ def load_graph(path: str | Path) -> CampusGraph:
         nodes=nodes,
         edges=edges,
         adjacency=adjacency,
+        edges_by_id={edge.id: edge for edge in edges},
         source_path=graph_path,
     )
 
