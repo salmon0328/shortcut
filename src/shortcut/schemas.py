@@ -16,12 +16,14 @@ No AI, no Bedrock, no AWS: this layer only validates data.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from shortcut.directions import step_text
 from shortcut.graph_store import CampusGraph, Edge, Node
+from shortcut.photo_store import Photo
 from shortcut.report_store import (
     CONDITIONS,
     Condition,
@@ -42,6 +44,12 @@ __all__ = [
     "ReportSummary",
     "ReportGroupSummary",
     "ReviewResult",
+    "PhotoSummary",
+    "NewNodeRequest",
+    "NewEdgeRequest",
+    "NodeUpdateRequest",
+    "EdgeUpdateRequest",
+    "GraphChangeResult",
 ]
 
 
@@ -130,6 +138,11 @@ class EdgeSummary(BaseModel):
     from_id: str = Field(description="Node id at one end.")
     to_id: str = Field(description="Node id at the other end.")
     label: str = Field(description="Readable name for both ends, for display.")
+    distance_m: float = Field(ge=0, description="How far it is, in metres.")
+    walk_seconds: float = Field(ge=0, description="How long it takes to walk.")
+    covered: bool = Field(default=False, description="True if sheltered from weather.")
+    stairs: bool = Field(default=False, description="True if it is a staircase.")
+    lift: bool = Field(default=False, description="True if it is a lift.")
     blocked: bool = Field(default=False, description="True if currently closed.")
     condition: str | None = Field(
         default=None, description="A known problem here, from an approved report."
@@ -142,6 +155,11 @@ class EdgeSummary(BaseModel):
             from_id=edge.from_id,
             to_id=edge.to_id,
             label=label,
+            distance_m=edge.distance_m,
+            walk_seconds=edge.walk_seconds,
+            covered=edge.covered,
+            stairs=edge.stairs,
+            lift=edge.lift,
             blocked=edge.blocked,
             condition=edge.condition,
         )
@@ -273,6 +291,13 @@ class RouteStep(BaseModel):
             "around instead of reported here."
         ),
     )
+    photo_url: str | None = Field(
+        default=None,
+        description=(
+            "A photo looking the way this step goes, if one has been taken. "
+            "Never a photo facing back the way the walker came."
+        ),
+    )
 
 
 class RouteResponse(BaseModel):
@@ -364,7 +389,12 @@ class RouteResponse(BaseModel):
         return self
 
     @classmethod
-    def from_route(cls, route: Route, graph: CampusGraph) -> "RouteResponse":
+    def from_route(
+        cls,
+        route: Route,
+        graph: CampusGraph,
+        find_photo: "Callable[[str, str, str | None], str | None] | None" = None,
+    ) -> "RouteResponse":
         """Convert a :class:`shortcut.tools.astar.Route` into this API shape.
 
         The internal names (``node_ids``, ``edge_ids``, ``total_seconds``) are
@@ -375,6 +405,10 @@ class RouteResponse(BaseModel):
         The graph is needed to build ``steps``: a :class:`Route` records only
         ids, while a step needs the edge's own numbers and the node names that
         go into its wording.
+
+        ``find_photo`` is passed in rather than looked up here, so this module
+        stays free of photo storage. It is called with the target kind, the
+        target id and the node being walked towards, and returns a URL or None.
         """
         steps: list[RouteStep] = []
         for index, edge_id in enumerate(route.edge_ids):
@@ -382,6 +416,9 @@ class RouteResponse(BaseModel):
             from_node = graph.nodes[route.node_ids[index]]
             to_node = graph.nodes[route.node_ids[index + 1]]
             text = step_text(edge, from_node, to_node)
+            photo_url = (
+                find_photo("edge", edge.id, to_node.id) if find_photo else None
+            )
 
             steps.append(
                 RouteStep(
@@ -397,6 +434,7 @@ class RouteResponse(BaseModel):
                     lift=edge.lift,
                     covered=edge.covered,
                     condition=edge.condition,
+                    photo_url=photo_url,
                 )
             )
 
@@ -548,3 +586,244 @@ class ReviewResult(BaseModel):
             "a crowded report does not change routing, only warns."
         )
     )
+
+
+# --------------------------------------------------------------------------
+# Photos
+# --------------------------------------------------------------------------
+
+
+class PhotoSummary(BaseModel):
+    """One photograph and where it was taken.
+
+    ``facing`` is the node being looked towards, which is what makes a photo
+    usable for directions: the same corridor needs a different picture
+    depending on which way you are walking down it.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    target_kind: str
+    target_id: str
+    facing: str | None = None
+    building: str
+    floor: str
+    location: str
+    caption: str = ""
+    content_type: str
+    size_bytes: int
+    uploaded_at: str
+    url: str = Field(description="Where to fetch the image itself.")
+
+    @classmethod
+    def from_photo(cls, photo: Photo) -> "PhotoSummary":
+        return cls(
+            id=photo.id,
+            target_kind=photo.target_kind,
+            target_id=photo.target_id,
+            facing=photo.facing,
+            building=photo.building,
+            floor=photo.floor,
+            location=photo.location,
+            caption=photo.caption,
+            content_type=photo.content_type,
+            size_bytes=photo.size_bytes,
+            uploaded_at=photo.uploaded_at,
+            url=f"/photos/{photo.id}/file",
+        )
+
+
+# --------------------------------------------------------------------------
+# Editing the map
+# --------------------------------------------------------------------------
+
+
+class NewEdgeRequest(BaseModel):
+    """A new corridor, staircase or lift between two places."""
+
+    model_config = ConfigDict(
+        str_strip_whitespace=True,
+        extra="forbid",
+        json_schema_extra={
+            "example": {
+                "id": "Hive_B5_100",
+                "from_id": "Hive_B5_G",
+                "to_id": "Hive_B5_H",
+                "distance_m": 14.0,
+                "walk_seconds": 10.0,
+                "covered": True,
+            }
+        },
+    )
+
+    id: str | None = Field(
+        default=None,
+        max_length=100,
+        description=(
+            "Unique id for the link. Left out, one is made from the two ends, "
+            "which is unique because two places can only be joined once."
+        ),
+    )
+    from_id: str = Field(min_length=1, description="Node id at one end.")
+    to_id: str = Field(min_length=1, description="Node id at the other end.")
+    distance_m: float = Field(ge=0, description="How far it is, in metres.")
+    walk_seconds: float = Field(ge=0, description="How long it takes to walk.")
+    covered: bool = Field(default=False, description="True if sheltered from weather.")
+    stairs: bool = Field(default=False, description="True if it is a staircase.")
+    lift: bool = Field(default=False, description="True if it is a lift.")
+    one_way: bool = Field(
+        default=False, description="True if it can only be walked from -> to."
+    )
+
+    @model_validator(mode="after")
+    def check_ends_differ(self) -> "NewEdgeRequest":
+        if self.from_id == self.to_id:
+            raise ValueError("An edge must join two different places.")
+        return self
+
+    def edge_id(self) -> str:
+        """The id to store this under, made from the ends if none was given."""
+        return self.id or f"{self.from_id}--{self.to_id}"
+
+    def to_fields(self) -> dict:
+        """The shape the graph file uses, which names the ends 'from' and 'to'."""
+        return {
+            "from": self.from_id,
+            "to": self.to_id,
+            "distance_m": self.distance_m,
+            "walk_seconds": self.walk_seconds,
+            "covered": self.covered,
+            "stairs": self.stairs,
+            "lift": self.lift,
+            "one_way": self.one_way,
+        }
+
+
+class NewNodeRequest(BaseModel):
+    """A new place on the map, optionally joined to somewhere already there.
+
+    A place with nothing leading to it cannot be walked to, so the form offers
+    to add one link at the same time. More can be added afterwards.
+    """
+
+    model_config = ConfigDict(
+        str_strip_whitespace=True,
+        extra="forbid",
+        json_schema_extra={
+            "example": {
+                "id": "Hive_B5_J",
+                "name": "Study Pods",
+                "building": "Hive",
+                "floor": "B5",
+                "type": "junction",
+                "connections": [
+                    {
+                        "from_id": "Hive_B5_J",
+                        "to_id": "Hive_B5_G",
+                        "distance_m": 12.0,
+                        "walk_seconds": 9.0,
+                        "covered": True,
+                    }
+                ],
+            }
+        },
+    )
+
+    id: str = Field(min_length=1, max_length=100, description="Unique id for the node.")
+    name: str = Field(min_length=1, max_length=100, description="What to call it.")
+    building: str = Field(min_length=1, max_length=100, description="Which building.")
+    floor: str = Field(min_length=1, max_length=20, description="Which floor.")
+    type: str = Field(
+        default="junction",
+        max_length=40,
+        description="What kind of place, e.g. 'junction', 'lift', 'stairs'.",
+    )
+    connections: list[NewEdgeRequest] = Field(
+        default_factory=list,
+        description=(
+            "Links to add at the same time, so the place is reachable. A "
+            "junction usually needs several."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def check_connections_are_distinct(self) -> "NewNodeRequest":
+        """Two links joining the same pair would collide on the same id."""
+        pairs = [
+            frozenset((edge.from_id, edge.to_id)) for edge in self.connections
+        ]
+        if len(pairs) != len(set(pairs)):
+            raise ValueError("The same two places are joined more than once.")
+
+        ids = [edge.edge_id() for edge in self.connections]
+        if len(ids) != len(set(ids)):
+            raise ValueError("Two of the links have the same id.")
+        return self
+
+    def to_fields(self) -> dict:
+        return {
+            "name": self.name,
+            "building": self.building,
+            "floor": self.floor,
+            "type": self.type,
+        }
+
+
+class NodeUpdateRequest(BaseModel):
+    """Changes to a place. Anything left out is left as it is."""
+
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    building: str | None = Field(default=None, min_length=1, max_length=100)
+    floor: str | None = Field(default=None, min_length=1, max_length=20)
+    type: str | None = Field(default=None, max_length=40)
+    condition: str | None = Field(
+        default=None, description="A known problem here, or empty to clear it."
+    )
+
+    def changed_fields(self) -> dict:
+        return self.model_dump(exclude_none=True)
+
+
+class EdgeUpdateRequest(BaseModel):
+    """Changes to a link. Anything left out is left as it is."""
+
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    distance_m: float | None = Field(default=None, ge=0)
+    walk_seconds: float | None = Field(default=None, ge=0)
+    covered: bool | None = None
+    stairs: bool | None = None
+    lift: bool | None = None
+    one_way: bool | None = None
+    blocked: bool | None = None
+    condition: str | None = None
+    directions_forward: str | None = Field(
+        default=None,
+        max_length=500,
+        description="Wording for walking from -> to. Generated if left empty.",
+    )
+    directions_reverse: str | None = Field(
+        default=None, max_length=500, description="Wording for walking the other way."
+    )
+
+    def changed_fields(self) -> dict:
+        return self.model_dump(exclude_none=True)
+
+
+class GraphChangeResult(BaseModel):
+    """What an edit to the map did."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    target_kind: str
+    target_id: str
+    created: bool = Field(description="True if this added something new.")
+    edge_ids: list[str] = Field(
+        default_factory=list,
+        description="Links added alongside a new place, if any.",
+    )
+    node_count: int = Field(description="Places on the map after the change.")
+    edge_count: int = Field(description="Links on the map after the change.")

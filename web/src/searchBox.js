@@ -24,11 +24,16 @@ function matchScore(node, query) {
   return -1;
 }
 
-function suggestionsFor(query) {
+function suggestionsFor(query, prefer) {
   const cleaned = query.trim().toLowerCase();
 
   return getNodes()
-    .map((node) => ({ node, score: matchScore(node, cleaned) }))
+    .map((node) => {
+      const score = matchScore(node, cleaned);
+      // A half-point nudge: enough to float likely places to the top, never
+      // enough to outrank a place whose name actually matches what was typed.
+      return { node, score: score >= 0 && prefer(node) ? score + 0.5 : score };
+    })
     .filter((entry) => entry.score >= 0)
     .sort((a, b) => b.score - a.score) // sort is stable, so ties keep graph order
     .slice(0, MAX_SUGGESTIONS)
@@ -43,9 +48,14 @@ const labelFor = (node) => `${node.name} (${node.building} · ${node.floor})`;
  * @param {HTMLInputElement} input
  * @param {HTMLElement} list
  * @param {(node: object|null) => void} [onChange] called whenever the choice changes
+ * @param {{prefer?: (node: object) => boolean}} [options] `prefer` floats
+ *   likely places to the top, which is what makes the list useful before
+ *   anything has been typed. It is read on every keystroke, so it can depend
+ *   on other fields the user is still filling in.
  * @returns {{selectedId: () => string|null, clear: () => void, select: (node) => void}}
  */
-export function createSearchBox(input, list, onChange = () => {}) {
+export function createSearchBox(input, list, onChange = () => {}, options = {}) {
+  const prefer = options.prefer ?? (() => false);
   let selectedId = null;
   let highlighted = -1;
   let shown = [];
@@ -119,15 +129,15 @@ export function createSearchBox(input, list, onChange = () => {}) {
       selectedId = null;
       onChange(null);
     }
-    render(suggestionsFor(input.value));
+    render(suggestionsFor(input.value, prefer));
   });
 
-  input.addEventListener("focus", () => render(suggestionsFor(input.value)));
+  input.addEventListener("focus", () => render(suggestionsFor(input.value, prefer)));
   input.addEventListener("blur", () => close());
 
   input.addEventListener("keydown", (event) => {
     if (list.hidden && event.key === "ArrowDown") {
-      render(suggestionsFor(input.value));
+      render(suggestionsFor(input.value, prefer));
       return;
     }
     if (event.key === "ArrowDown") {

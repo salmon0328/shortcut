@@ -77,3 +77,58 @@ export const fetchReportGroups = () => request("/reports/groups");
 /** Approve or reject one group of reports. `action` is "approve" or "reject". */
 export const reviewReportGroup = (key, action) =>
   postJson(`/reports/groups/${encodeURIComponent(key)}/${action}`, {});
+
+// --- editing the map, and photos of it ------------------------------------
+
+export const addNode = (payload) => postJson("/admin/nodes", payload);
+export const addEdge = (payload) => postJson("/admin/edges", payload);
+
+const patchJson = (path, payload) =>
+  request(path, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+export const updateNode = (nodeId, changes) =>
+  patchJson(`/admin/nodes/${encodeURIComponent(nodeId)}`, changes);
+export const updateEdge = (edgeId, changes) =>
+  patchJson(`/admin/edges/${encodeURIComponent(edgeId)}`, changes);
+
+export const deleteAddition = (targetKind, targetId) =>
+  request(`/admin/additions/${targetKind}/${encodeURIComponent(targetId)}`, {
+    method: "DELETE",
+  });
+
+export const fetchPhotos = (targetKind, targetId) => {
+  const query = new URLSearchParams({
+    target_kind: targetKind,
+    target_id: targetId,
+  });
+  return request(`/photos?${query}`);
+};
+
+/**
+ * Upload one photo.
+ *
+ * Sent as multipart form data rather than JSON, because it carries a file.
+ * The Content-Type header is left unset on purpose: the browser has to add it
+ * itself, complete with the boundary marker separating the parts.
+ */
+export function uploadPhoto({ file, targetKind, targetId, facing, location, caption }) {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("target_kind", targetKind);
+  form.append("target_id", targetId);
+  if (facing) form.append("facing", facing);
+  if (location) form.append("location", location);
+  if (caption) form.append("caption", caption);
+
+  return request("/photos", { method: "POST", body: form });
+}
+
+export const deletePhoto = (photoId) =>
+  request(`/photos/${encodeURIComponent(photoId)}`, { method: "DELETE" });
+
+/** Turn a photo's path into something an <img> can load. */
+export const photoUrl = (path) => `${API_BASE_URL}${path}`;
