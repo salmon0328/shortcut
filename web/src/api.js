@@ -84,6 +84,9 @@ export async function fetchFloorplan(building, floor) {
 export const submitReport = (payload) => postJson("/reports", payload);
 export const fetchReportGroups = () => request("/reports/groups");
 
+/** Everything sitting in the overrides file, not yet folded into the survey. */
+export const fetchPendingChanges = () => request("/admin/pending");
+
 /** Approve or reject one group of reports. `action` is "approve" or "reject". */
 export const reviewReportGroup = (key, action) =>
   postJson(`/reports/groups/${encodeURIComponent(key)}/${action}`, {});

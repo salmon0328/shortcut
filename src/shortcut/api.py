@@ -39,6 +39,7 @@ from fastapi.responses import FileResponse
 
 from shortcut.graph_store import CampusGraph, Edge, UnknownNodeError, load_graph
 from shortcut.overrides import (
+    LIVE_CONDITION_FIELDS,
     OverridesError,
     add_edge,
     add_node,
@@ -67,6 +68,8 @@ from shortcut.schemas import (
     NewNodeRequest,
     NodeSummary,
     NodeUpdateRequest,
+    PendingChange,
+    PendingChanges,
     PhotoSummary,
     ReportGroupSummary,
     ReportRequest,
@@ -1232,4 +1235,66 @@ def post_route_options(
             )
             for route in others
         ],
+    )
+
+
+# --------------------------------------------------------------------------
+# What is waiting to be folded into the survey
+# --------------------------------------------------------------------------
+
+
+def _split_fields(fields: dict) -> tuple[list[str], list[str]]:
+    """Sort a change's fields into what the survey keeps and what stays live."""
+    graduating = sorted(f for f in fields if f not in LIVE_CONDITION_FIELDS)
+    live = sorted(f for f in fields if f in LIVE_CONDITION_FIELDS)
+    return graduating, live
+
+
+def _pending_change(
+    graph: CampusGraph, kind: str, change: str, target_id: str, fields: dict
+) -> PendingChange:
+    graduating, live = _split_fields(fields)
+    return PendingChange(
+        kind=kind,
+        change=change,
+        id=target_id,
+        label=_describe_target(graph, kind, target_id),
+        fields=fields,
+        graduating_fields=graduating,
+        live_fields=live,
+    )
+
+
+@app.get(
+    "/admin/pending",
+    response_model=PendingChanges,
+    summary="Everything changed since the survey, not yet folded into it",
+)
+def get_pending_changes(
+    request: Request, graph: CampusGraph = Depends(get_graph)
+) -> PendingChanges:
+    """List what is sitting in the overrides file.
+
+    Read-only. Moving any of it into ``data/campus_graph.json`` is done by
+    running ``scripts/graduate_overrides.py``, so that a change to a version
+    controlled file stays a deliberate act reviewed as a git diff rather than
+    a button pressed while browsing.
+    """
+    overrides = load_overrides(request.app.state.overrides_path)
+
+    changes: list[PendingChange] = []
+    for node_id, fields in overrides["added_nodes"].items():
+        changes.append(_pending_change(graph, "node", "added", node_id, fields))
+    for edge_id, fields in overrides["added_edges"].items():
+        changes.append(_pending_change(graph, "edge", "added", edge_id, fields))
+    for node_id, fields in overrides["nodes"].items():
+        changes.append(_pending_change(graph, "node", "edited", node_id, fields))
+    for edge_id, fields in overrides["edges"].items():
+        changes.append(_pending_change(graph, "edge", "edited", edge_id, fields))
+
+    return PendingChanges(
+        changes=changes,
+        total=len(changes),
+        graduating=sum(1 for c in changes if c.graduating_fields),
+        live_only=sum(1 for c in changes if not c.graduating_fields),
     )

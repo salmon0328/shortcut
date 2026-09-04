@@ -43,6 +43,7 @@ __all__ = [
     "OverridesError",
     "NODE_PATCHABLE_FIELDS",
     "EDGE_PATCHABLE_FIELDS",
+    "LIVE_CONDITION_FIELDS",
     "load_overrides",
     "save_overrides",
     "apply_overrides",
@@ -63,6 +64,13 @@ SECTIONS = ("nodes", "edges", "added_nodes", "added_edges")
 NODE_PATCHABLE_FIELDS = frozenset(
     {"name", "building", "floor", "type", "x", "y", "condition", "blocked"}
 )
+# Fields that describe a passing state of the world rather than the building
+# itself. They come from approved reports - a corridor is flooded this week,
+# a lobby is crowded at lunch - and belong in the overrides file, not in the
+# survey. Folding "flooded" into campus_graph.json would make this week's
+# puddle a permanent feature of the map.
+LIVE_CONDITION_FIELDS = frozenset({"blocked", "condition"})
+
 EDGE_PATCHABLE_FIELDS = frozenset(
     {
         "distance_m",
