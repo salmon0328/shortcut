@@ -24,7 +24,16 @@
       </header>
 
       <!-- ============================ PLAN ============================ -->
-      <section id="plan-view">
+      <!-- On a phone this stacks: map on top, controls below. On a wider
+           screen the controls become a side panel and the map fills the rest,
+           which is the same arrangement but laid out sideways. -->
+      <section id="plan-view" class="layout">
+        <div class="map-panel" id="map-panel">
+          <div class="map-floors" id="map-floors" hidden></div>
+          <div class="map-canvas" id="map-canvas"></div>
+        </div>
+
+        <div class="control-panel">
         <form id="route-form" class="card" autocomplete="off">
           <div class="field">
             <label for="origin-input">I am at…</label>
@@ -70,7 +79,7 @@
               <input type="radio" name="preference" value="fastest" checked />
               <span>
                 Fastest
-                <small>Whichever is quicker, stairs or lift</small>
+                <small>Whichever gets you there soonest</small>
               </span>
             </label>
 
@@ -79,6 +88,14 @@
               <span>
                 Less climbing
                 <small>Takes the lift where there is one</small>
+              </span>
+            </label>
+
+            <label class="choice">
+              <input type="radio" name="preference" value="least_walking" />
+              <span>
+                Less walking
+                <small>Rides the shuttle rather than walking far</small>
               </span>
             </label>
           </fieldset>
@@ -94,6 +111,11 @@
             <label class="choice">
               <input type="checkbox" id="allow-lift" checked />
               <span>Lifts allowed</span>
+            </label>
+
+            <label class="choice">
+              <input type="checkbox" id="allow-shuttle" checked />
+              <span>Shuttles allowed</span>
             </label>
 
             <label class="choice">
@@ -113,20 +135,28 @@
 
           <dl class="totals">
             <div>
-              <dt>Walking time</dt>
+              <dt>Time</dt>
               <dd id="total-time">—</dd>
             </div>
             <div>
-              <dt>Distance</dt>
+              <dt>Walking</dt>
               <dd id="total-distance">—</dd>
             </div>
           </dl>
 
+          <p id="total-extra" class="total-extra"></p>
+
           <ul class="badges">
             <li id="badge-stairs"></li>
             <li id="badge-lift"></li>
+            <li id="badge-shuttle"></li>
             <li id="badge-shelter"></li>
           </ul>
+
+          <button type="button" id="show-options" class="secondary">
+            View other routes
+          </button>
+          <div id="route-options" class="route-options" hidden></div>
 
           <h3>Steps</h3>
           <p id="step-progress" class="step-progress"></p>
@@ -141,6 +171,7 @@
             Report a problem
           </button>
         </section>
+        </div>
       </section>
 
       <!-- =========================== REPORT =========================== -->
@@ -300,6 +331,7 @@
                   <option value="lift">Lift</option>
                   <option value="entrance">Entrance</option>
                   <option value="room">Room</option>
+                  <option value="bus_stop">Bus stop</option>
                 </select>
               </div>
             </div>
@@ -411,6 +443,24 @@
               <input type="checkbox" id="link-lift" />
               <span>Lift</span>
             </label>
+            <label class="choice">
+              <input type="checkbox" id="link-shuttle" />
+              <span>
+                Shuttle ride
+                <small>A bus between two stops, not a walk</small>
+              </span>
+            </label>
+
+            <div class="field" id="link-wait-field" hidden>
+              <label for="link-wait">Typical wait for the shuttle (seconds)</label>
+              <input
+                type="number"
+                id="link-wait"
+                min="0"
+                step="1"
+                placeholder="e.g. 300 — leave blank for no wait"
+              />
+            </div>
 
             <button type="submit" id="add-edge-submit">Add link</button>
           </form>

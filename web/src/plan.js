@@ -1,9 +1,10 @@
 // The route planner: pick two places, ask the backend, then walk the answer
 // one step at a time.
 
-import { photoUrl, requestRoute } from "./api.js";
+import { photoUrl, requestRoute, requestRouteOptions } from "./api.js";
 import { nodeName } from "./data.js";
 import { createSearchBox } from "./searchBox.js";
+import { showEmptyMap, showRouteOnMap } from "./mapView.js";
 
 const form = document.querySelector("#route-form");
 const findButton = document.querySelector("#find-button");
@@ -12,6 +13,7 @@ const errorMessage = document.querySelector("#error");
 
 const allowStairsCheckbox = document.querySelector("#allow-stairs");
 const allowLiftCheckbox = document.querySelector("#allow-lift");
+const allowShuttleCheckbox = document.querySelector("#allow-shuttle");
 const shelteredOnlyCheckbox = document.querySelector("#sheltered-only");
 
 const resultCard = document.querySelector("#result");
@@ -19,7 +21,11 @@ const totalTimeOutput = document.querySelector("#total-time");
 const totalDistanceOutput = document.querySelector("#total-distance");
 const stairsBadge = document.querySelector("#badge-stairs");
 const liftBadge = document.querySelector("#badge-lift");
+const shuttleBadge = document.querySelector("#badge-shuttle");
 const shelterBadge = document.querySelector("#badge-shelter");
+const totalExtra = document.querySelector("#total-extra");
+const showOptionsButton = document.querySelector("#show-options");
+const optionsList = document.querySelector("#route-options");
 const stepsList = document.querySelector("#route-steps");
 const stepProgress = document.querySelector("#step-progress");
 const backButton = document.querySelector("#back-button");
@@ -37,6 +43,8 @@ const destinationBox = createSearchBox(
 // The route on screen, and how far along the user says they are.
 let currentSteps = [];
 let currentStepIndex = 0;
+// What was asked for, kept so "other routes" can ask the same thing again.
+let lastRequest = null;
 
 // --------------------------------------------------------------------------
 // Showing one state at a time
@@ -165,12 +173,30 @@ function renderSteps() {
 function showRoute(route) {
   clearOutput();
 
-  totalTimeOutput.textContent = formatSeconds(route.total_walk_seconds);
-  totalDistanceOutput.textContent = formatMetres(route.total_distance_m);
+  // Time shown is time on the move plus any waiting, because that is what
+  // "how long will this take me" means to somebody standing at a bus stop.
+  const totalTime = route.total_walk_seconds + (route.total_wait_seconds ?? 0);
+  totalTimeOutput.textContent = formatSeconds(totalTime);
+  totalDistanceOutput.textContent = formatMetres(route.walking_distance_m ?? 0);
+
+  // Only worth saying when the two numbers differ, which is when part of the
+  // journey was a ride rather than a walk.
+  const extras = [];
+  if (route.total_wait_seconds > 0) {
+    extras.push(`includes ${formatSeconds(route.total_wait_seconds)} waiting`);
+  }
+  if (route.total_distance_m > (route.walking_distance_m ?? 0)) {
+    extras.push(`${formatMetres(route.total_distance_m)} travelled in total`);
+  }
+  totalExtra.textContent = extras.join(" · ");
+  totalExtra.hidden = extras.length === 0;
 
   setBadge(stairsBadge, route.uses_stairs, "Uses stairs", "No stairs");
   setBadge(liftBadge, route.uses_lift, "Uses lift", "No lift");
+  setBadge(shuttleBadge, route.uses_shuttle, "Uses shuttle", "No shuttle");
   setBadge(shelterBadge, route.fully_sheltered, "Sheltered", "Partly exposed");
+
+  showRouteOnMap(route);
 
   currentSteps = route.steps ?? [];
   currentStepIndex = 0;
@@ -191,6 +217,80 @@ function showRoute(route) {
   resultCard.hidden = false;
 }
 
+
+// --------------------------------------------------------------------------
+// Other ways round
+// --------------------------------------------------------------------------
+
+function optionCard(option, isPrimary) {
+  const card = document.createElement("button");
+  card.type = "button";
+  card.className = isPrimary ? "route-option is-current" : "route-option";
+
+  const label = document.createElement("span");
+  label.className = "route-option-label";
+  label.textContent = option.label;
+
+  const why = document.createElement("span");
+  why.className = "route-option-why";
+  why.textContent = option.why;
+
+  const numbers = document.createElement("span");
+  numbers.className = "route-option-numbers";
+  const time = option.route.total_walk_seconds + (option.route.total_wait_seconds ?? 0);
+  numbers.textContent =
+    `${formatSeconds(time)} · ${formatMetres(option.route.walking_distance_m ?? 0)} walking`;
+
+  card.append(label, why, numbers);
+  card.addEventListener("click", () => {
+    for (const other of optionsList.querySelectorAll(".route-option")) {
+      other.classList.remove("is-current");
+    }
+    card.classList.add("is-current");
+    // showRoute only hides and refills the result card; it never touches this
+    // list, so the options stay on screen to be switched between.
+    showRoute(option.route);
+  });
+  return card;
+}
+
+function renderChoices(choices) {
+  optionsList.replaceChildren();
+
+  if (choices.alternatives.length === 0) {
+    const note = document.createElement("p");
+    note.className = "hint";
+    note.textContent = "No other way round is better in any way worth offering.";
+    optionsList.appendChild(note);
+  } else {
+    [choices.primary, ...choices.alternatives].forEach((option, index) => {
+      optionsList.appendChild(optionCard(option, index === 0));
+    });
+  }
+  optionsList.hidden = false;
+}
+
+showOptionsButton.addEventListener("click", async () => {
+  if (!lastRequest) return;
+
+  if (!optionsList.hidden && optionsList.childElementCount > 0) {
+    optionsList.hidden = true;
+    showOptionsButton.textContent = "View other routes";
+    return;
+  }
+
+  showOptionsButton.disabled = true;
+  showOptionsButton.textContent = "Looking…";
+  try {
+    renderChoices(await requestRouteOptions(lastRequest));
+    showOptionsButton.textContent = "Hide other routes";
+  } catch (error) {
+    showPlanError(error.message);
+  } finally {
+    showOptionsButton.disabled = false;
+  }
+});
+
 /** The step the user is currently on, so a report can be about the right place. */
 export function currentStep() {
   return currentSteps[currentStepIndex] ?? null;
@@ -206,6 +306,7 @@ function currentOptions() {
     preference: chosen ? chosen.value : "fastest",
     allow_stairs: allowStairsCheckbox.checked,
     allow_lift: allowLiftCheckbox.checked,
+    allow_shuttle: allowShuttleCheckbox.checked,
     sheltered_only: shelteredOnlyCheckbox.checked,
   };
 }
@@ -214,12 +315,13 @@ async function findRoute(origin, destination) {
   showPlanLoading("Finding the best route…");
   findButton.textContent = "Finding…";
 
+  lastRequest = { origin, destination, ...currentOptions() };
+  optionsList.replaceChildren();
+  optionsList.hidden = true;
+  showOptionsButton.textContent = "View other routes";
+
   try {
-    const route = await requestRoute({
-      origin,
-      destination,
-      ...currentOptions(),
-    });
+    const route = await requestRoute(lastRequest);
     stopPlanLoading();
     showRoute(route);
   } catch (error) {
@@ -257,3 +359,6 @@ nextButton.addEventListener("click", () => {
     renderSteps();
   }
 });
+
+// Start with an empty map rather than a blank panel.
+showEmptyMap();

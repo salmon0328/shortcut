@@ -70,6 +70,8 @@ EDGE_PATCHABLE_FIELDS = frozenset(
         "covered",
         "stairs",
         "lift",
+        "shuttle",
+        "wait_seconds",
         "blocked",
         "one_way",
         "condition",

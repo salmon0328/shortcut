@@ -88,6 +88,22 @@ def describe_step(edge: Edge, from_node: Node, to_node: Node) -> StepText:
             ),
         )
 
+    if edge.shuttle:
+        # A ride, not a walk, so the wording is about boarding rather than
+        # distance: how far the bus goes is not the rider's problem.
+        wait = (
+            f" Buses usually come within about {round(edge.wait_seconds / 60)} min."
+            if edge.wait_seconds >= 60
+            else ""
+        )
+        return StepText(
+            instruction=f"Take the shuttle to {to_node.name}",
+            detail=(
+                f"Board the shuttle at {from_node.name} and ride to "
+                f"{destination}, about {round(edge.walk_seconds / 60)} min.{wait}"
+            ),
+        )
+
     metres = round(edge.distance_m)
 
     if changing_building:
