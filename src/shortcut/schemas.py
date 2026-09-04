@@ -762,6 +762,7 @@ class NewEdgeRequest(BaseModel):
             "lift": self.lift,
             "shuttle": self.shuttle,
             "wait_seconds": self.wait_seconds,
+            "blocked": False,
             "one_way": self.one_way,
         }
 

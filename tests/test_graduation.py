@@ -17,9 +17,10 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from shortcut.api import app
+from shortcut.api import app, get_reports
 from shortcut.graph_store import load_graph
 from shortcut.overrides import apply_overrides, load_overrides
+from shortcut.report_store import ReportStore
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_PATH = PROJECT_ROOT / "scripts" / "graduate_overrides.py"
@@ -49,10 +50,19 @@ def workspace(tmp_path: Path, graph_path: Path) -> dict:
 
 
 @pytest.fixture
-def surveyed(workspace: dict) -> Iterator[dict]:
-    """A realistic session: coordinates surveyed, a place added, a report approved."""
+def surveyed(workspace: dict, tmp_path: Path) -> Iterator[dict]:
+    """A realistic session: coordinates surveyed, a place added, a report approved.
+
+    Reports go through a throwaway store, the same way ``test_reports.py``
+    does it: without this override, the report submitted below would land in
+    the real ``data/reports.json`` on every test run rather than in tmp_path.
+    """
+    store = ReportStore(tmp_path / "reports.json")
+    app.dependency_overrides[get_reports] = lambda: store
+
     with TestClient(app) as client:
         app.state.overrides_path = workspace["overrides"]
+        app.state.reports = store
 
         client.patch("/admin/nodes/Hive_B5_A", json={"x": 12.5, "y": 30.0})
         client.post(
@@ -88,6 +98,7 @@ def surveyed(workspace: dict) -> Iterator[dict]:
         client.post("/reports/groups/flooded:Hive_B5_002/approve")
 
         yield {**workspace, "client": client}
+    app.dependency_overrides.clear()
 
 
 def run(workspace: dict, *args: str) -> int:
@@ -179,7 +190,7 @@ def test_untouched_entries_keep_their_exact_shape(surveyed: dict) -> None:
     run(surveyed, "--write")
     after = json.loads(surveyed["campus"].read_text(encoding="utf-8"))
 
-    untouched = {"Hive_B5_B", "Hive_B4_A", "Hive_B4_H"}
+    untouched = {"Hive_B5_B", "Hive_B5_D", "Hive_B5_F"}
     before_by_id = {n["id"]: n for n in before["nodes"]}
     after_by_id = {n["id"]: n for n in after["nodes"]}
     for node_id in untouched:

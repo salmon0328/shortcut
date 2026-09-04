@@ -23,13 +23,15 @@ from shortcut.tools.astar import (
     find_route_or_none,
 )
 
-# The route under test, worked out by hand from the floorplan:
+# The route under test, worked out by hand from the floorplan. Only Hive's B5
+# floor is in the graph right now - B4 was deliberately removed so testing
+# could start against a small, real, single-floor subset before more of the
+# building is surveyed:
 #   Hive_B5_A --(Hive_B5_002)-> Hive_B5_G --(Hive_B5_007)-> Hive_B5_C
-#              --(Hive_B5_019, stairs)-> Hive_B4_C
 ORIGIN = "Hive_B5_A"
-DESTINATION = "Hive_B4_C"
-EXPECTED_NODES = ("Hive_B5_A", "Hive_B5_G", "Hive_B5_C", "Hive_B4_C")
-EXPECTED_EDGES = ("Hive_B5_002", "Hive_B5_007", "Hive_B5_019")
+DESTINATION = "Hive_B5_C"
+EXPECTED_NODES = ("Hive_B5_A", "Hive_B5_G", "Hive_B5_C")
+EXPECTED_EDGES = ("Hive_B5_002", "Hive_B5_007")
 
 
 # --------------------------------------------------------------------------
@@ -124,7 +126,7 @@ def two_island_graph(tmp_path: Path) -> CampusGraph:
 
 
 # --------------------------------------------------------------------------
-# A successful route: Hive_B5_A -> Hive_B4_C
+# A successful route: Hive_B5_A -> Hive_B5_C
 # --------------------------------------------------------------------------
 
 
@@ -156,7 +158,7 @@ def test_total_walking_time_matches_graph_values(graph: CampusGraph) -> None:
     expected_seconds = total_seconds_of(graph, EXPECTED_EDGES)
 
     assert route.total_seconds == pytest.approx(expected_seconds)
-    assert route.total_seconds == pytest.approx(49.0)  # 21 + 8 + 20
+    assert route.total_seconds == pytest.approx(29.0)  # 21 + 8
 
 
 def test_total_distance_matches_graph_values(graph: CampusGraph) -> None:
@@ -165,7 +167,7 @@ def test_total_distance_matches_graph_values(graph: CampusGraph) -> None:
     expected_metres = sum(edge_by_id(graph, e).distance_m for e in EXPECTED_EDGES)
 
     assert route.total_distance_m == pytest.approx(expected_metres)
-    assert route.total_distance_m == pytest.approx(55.6)  # 29.4 + 11.2 + 15.0
+    assert route.total_distance_m == pytest.approx(40.6)  # 29.4 + 11.2
 
 
 def test_route_edges_actually_join_the_nodes(graph: CampusGraph) -> None:
@@ -179,16 +181,68 @@ def test_route_edges_actually_join_the_nodes(graph: CampusGraph) -> None:
 
 
 def test_route_reports_stairs_and_lift_use(graph: CampusGraph) -> None:
+    """With only one floor surveyed, nothing here uses stairs or a lift.
+
+    Both flags only ever lived on the corridors that crossed floors, so a
+    single-floor graph has neither - real reflection of the current data,
+    not a broken test. See test_a_stairs_edge_is_reported / test_a_lift_edge_is_reported
+    below for coverage of the flags actually working, against a small
+    synthetic graph built for exactly that.
+    """
     route = find_route(graph, ORIGIN, DESTINATION)
 
-    assert route.uses_stairs is True  # Hive_B5_019 is the staircase link
+    assert route.uses_stairs is False
     assert route.uses_lift is False
+
+
+def test_a_stairs_edge_is_reported(tmp_path: Path) -> None:
+    data = {
+        "nodes": [
+            {"id": "A", "name": "Upper", "building": "Test", "floor": "1", "type": "stairs"},
+            {"id": "B", "name": "Lower", "building": "Test", "floor": "2", "type": "stairs"},
+        ],
+        "edges": [
+            {
+                "id": "AB", "from": "A", "to": "B",
+                "distance_m": 15, "walk_seconds": 20,
+                "covered": True, "stairs": True, "lift": False, "blocked": False,
+            },
+        ],
+    }
+    graph = load_graph(write_graph(tmp_path, data, "stairs_only.json"))
+
+    route = find_route(graph, "A", "B")
+
+    assert route.uses_stairs is True
+    assert route.uses_lift is False
+
+
+def test_a_lift_edge_is_reported(tmp_path: Path) -> None:
+    data = {
+        "nodes": [
+            {"id": "A", "name": "Upper", "building": "Test", "floor": "1", "type": "lift"},
+            {"id": "B", "name": "Lower", "building": "Test", "floor": "2", "type": "lift"},
+        ],
+        "edges": [
+            {
+                "id": "AB", "from": "A", "to": "B",
+                "distance_m": 0, "walk_seconds": 5,
+                "covered": True, "stairs": False, "lift": True, "blocked": False,
+            },
+        ],
+    }
+    graph = load_graph(write_graph(tmp_path, data, "lift_only.json"))
+
+    route = find_route(graph, "A", "B")
+
+    assert route.uses_lift is True
+    assert route.uses_stairs is False
 
 
 def test_route_is_cheaper_than_a_known_alternative(graph: CampusGraph) -> None:
     """Sanity check that the search really minimises, rather than just walking."""
     route = find_route(graph, ORIGIN, DESTINATION)
-    alternative = ("Hive_B5_001", "Hive_B5_013", "Hive_B5_007", "Hive_B5_019")
+    alternative = ("Hive_B5_001", "Hive_B5_012", "Hive_B5_006")
 
     assert route.total_seconds < total_seconds_of(graph, alternative)
 
@@ -259,8 +313,8 @@ def test_no_blocked_edge_ever_appears_in_a_route(
 def test_blocking_every_edge_of_a_node_makes_it_unreachable(
     graph_with_blocked_edges: Callable[[set[str]], CampusGraph],
 ) -> None:
-    """Hive_B5_B only has two edges; block both and it is cut off."""
-    cut_off_graph = graph_with_blocked_edges({"Hive_B5_004", "Hive_B5_015"})
+    """Hive_B5_B only has one edge left now B4 (and its lift) is gone."""
+    cut_off_graph = graph_with_blocked_edges({"Hive_B5_004"})
 
     assert cut_off_graph.neighbours("Hive_B5_B") == []
     with pytest.raises(NoRouteFoundError):
@@ -375,10 +429,16 @@ def test_a_route_to_the_same_node_counts_as_sheltered(graph: CampusGraph) -> Non
 # --------------------------------------------------------------------------
 
 
-def test_real_graph_file_is_never_modified(graph_path: Path) -> None:
-    """Guard for requirement 9: tests must not rewrite data/campus_graph.json."""
-    data = json.loads(graph_path.read_text(encoding="utf-8"))
+def test_real_graph_file_is_never_modified(
+    graph_path: Path, graph_bytes_at_session_start: bytes
+) -> None:
+    """Guard for requirement 9: tests must not rewrite data/campus_graph.json.
 
-    assert len(data["nodes"]) == 17
-    assert len(data["edges"]) == 27
-    assert all(edge["blocked"] is False for edge in data["edges"])
+    Compares against a snapshot taken before any test ran, not a hardcoded
+    count: the graph is real survey data that keeps growing, so a fixed
+    node/edge number would go stale the moment someone surveys a new place.
+    """
+    assert graph_path.read_bytes() == graph_bytes_at_session_start
+
+    data = json.loads(graph_path.read_text(encoding="utf-8"))
+    assert all(edge.get("blocked", False) is False for edge in data["edges"])
