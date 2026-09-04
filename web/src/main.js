@@ -1,14 +1,12 @@
 // Shortcut frontend.
 //
-// On load, it fetches the list of navigation points from the backend's
-// GET /nodes and uses that to build the two dropdowns — nothing about the
-// building is hardcoded here, so the page can never drift out of sync with
-// data/campus_graph.json the way a hand-typed list could.
+// On load it fetches the list of places from the backend's GET /nodes, so
+// nothing about the building is hardcoded here and the page cannot drift out
+// of sync with data/campus_graph.json.
 //
-// Then it does what it always did: collect two node ids, POST them to
-// /route, and show the answer. All the routing work happens on the backend;
-// this file only sends requests and draws results. No AI, no map drawing,
-// no libraries.
+// Then: pick a start and an end from the search boxes, POST them to /route,
+// and walk through the answer one step at a time. All the routing happens on
+// the backend. No AI, no map drawing, no libraries.
 
 import "./style.css";
 
@@ -16,17 +14,19 @@ import "./style.css";
 // (http://localhost:5173) in its CORS settings, which it does for development.
 const API_BASE_URL = "http://127.0.0.1:8000";
 
-// Default picks, used if they turn out to exist in the fetched node list.
-const DEFAULT_ORIGIN = "Hive_B5_A";
-const DEFAULT_DESTINATION = "Hive_B4_E";
+// Places to offer before the user has typed anything, and the most to offer
+// at once. Small enough to scan, long enough to be useful.
+const MAX_SUGGESTIONS = 8;
 
 // --------------------------------------------------------------------------
 // The page elements we need
 // --------------------------------------------------------------------------
 
 const form = document.querySelector("#route-form");
-const originSelect = document.querySelector("#origin");
-const destinationSelect = document.querySelector("#destination");
+const originInput = document.querySelector("#origin-input");
+const originSuggestions = document.querySelector("#origin-suggestions");
+const destinationInput = document.querySelector("#destination-input");
+const destinationSuggestions = document.querySelector("#destination-suggestions");
 const findButton = document.querySelector("#find-button");
 
 const allowStairsCheckbox = document.querySelector("#allow-stairs");
@@ -43,16 +43,22 @@ const stairsBadge = document.querySelector("#badge-stairs");
 const liftBadge = document.querySelector("#badge-lift");
 const shelterBadge = document.querySelector("#badge-shelter");
 const stepsList = document.querySelector("#route-steps");
+const stepProgress = document.querySelector("#step-progress");
+const backButton = document.querySelector("#back-button");
+const nextButton = document.querySelector("#next-button");
 
-// Filled in once GET /nodes succeeds. Maps a node id to its full
-// { id, name, floor } record, so showRoute() can look up readable names.
+// Every place the backend knows about, and a lookup by id.
+let allNodes = [];
 let nodesById = new Map();
+
+// The route currently on screen, and how far through it the user says they are.
+let currentSteps = [];
+let currentStepIndex = 0;
 
 // --------------------------------------------------------------------------
 // Showing one state at a time
 // --------------------------------------------------------------------------
 
-/** Hide the loading, error and result areas. */
 function clearOutput() {
   loadingMessage.hidden = true;
   errorMessage.hidden = true;
@@ -96,14 +102,11 @@ function describeErrorBody(body, status) {
     return detail;
   }
   if (Array.isArray(detail)) {
-    return detail
-      .map((problem) => problem.msg ?? "Invalid value")
-      .join("; ");
+    return detail.map((problem) => problem.msg ?? "Invalid value").join("; ");
   }
   return `The server replied with status ${status}.`;
 }
 
-/** A network-level failure, shown the same way everywhere it can happen. */
 function unreachableBackendMessage() {
   return (
     `Could not reach the backend at ${API_BASE_URL}. ` +
@@ -112,48 +115,164 @@ function unreachableBackendMessage() {
 }
 
 // --------------------------------------------------------------------------
-// Loading the list of navigation points
+// Search boxes
 // --------------------------------------------------------------------------
 
-/** Build one dropdown from a list of nodes, grouped by building and floor. */
-function fillDropdown(select, nodes, selectedId) {
-  select.replaceChildren();
-
-  // Group by building-and-floor, keeping the order those groups first appear
-  // in, so the page reflects however data/campus_graph.json orders things.
-  // Nothing about the building is hardcoded here.
-  const groupOrder = [];
-  const nodesByGroup = new Map();
-  for (const node of nodes) {
-    const key = `${node.building} · Level ${node.floor}`;
-    if (!nodesByGroup.has(key)) {
-      groupOrder.push(key);
-      nodesByGroup.set(key, []);
-    }
-    nodesByGroup.get(key).push(node);
+/** How well a place matches what has been typed. Higher is better, -1 is no match. */
+function matchScore(node, query) {
+  if (!query) {
+    return 0; // nothing typed yet: everything is equally worth showing
   }
 
-  for (const key of groupOrder) {
-    // Node names such as "Staircase 1" repeat on every floor, so the group
-    // heading is what tells the user which one they are picking.
-    const group = document.createElement("optgroup");
-    group.label = key;
+  const name = node.name.toLowerCase();
+  const everything =
+    `${node.name} ${node.building} ${node.floor} ${node.id}`.toLowerCase();
 
-    for (const node of nodesByGroup.get(key)) {
-      const option = document.createElement("option");
-      option.value = node.id;
-      // Include the building and floor in the option text itself, not just
-      // the group heading: once a value is chosen, a collapsed <select> only
-      // ever displays the selected option's own text, so "Staircase 1" alone
-      // would be ambiguous the moment a second building has one too.
-      option.textContent = `${node.name} (${node.building} · ${node.floor})`;
-      option.selected = node.id === selectedId;
-      group.appendChild(option);
-    }
-
-    select.appendChild(group);
-  }
+  if (name.startsWith(query)) return 3;
+  if (name.includes(query)) return 2;
+  if (everything.includes(query)) return 1;
+  return -1;
 }
+
+/** The best few places for what has been typed so far. */
+function suggestionsFor(query) {
+  const cleaned = query.trim().toLowerCase();
+
+  return allNodes
+    .map((node) => ({ node, score: matchScore(node, cleaned) }))
+    .filter((entry) => entry.score >= 0)
+    .sort((a, b) => b.score - a.score) // Array.sort is stable, so ties keep graph order
+    .slice(0, MAX_SUGGESTIONS)
+    .map((entry) => entry.node);
+}
+
+/** The text shown in the box once a place is chosen. */
+function labelFor(node) {
+  return `${node.name} (${node.building} · ${node.floor})`;
+}
+
+/**
+ * Wire up one search box.
+ *
+ * Returns a small object with `selectedId()`, because the box's text alone is
+ * not a valid answer: the backend needs a node id, and what the user typed may
+ * match nothing at all.
+ */
+function createSearchBox(input, list) {
+  let selectedId = null;
+  let highlighted = -1;
+  let shown = [];
+
+  function close() {
+    list.hidden = true;
+    input.setAttribute("aria-expanded", "false");
+    highlighted = -1;
+  }
+
+  function choose(node) {
+    selectedId = node.id;
+    input.value = labelFor(node);
+    close();
+  }
+
+  function render(nodes) {
+    shown = nodes;
+    list.replaceChildren();
+
+    if (nodes.length === 0) {
+      const empty = document.createElement("li");
+      empty.className = "suggestion-empty";
+      empty.textContent = "No matching place";
+      list.appendChild(empty);
+    }
+
+    nodes.forEach((node, index) => {
+      const item = document.createElement("li");
+      item.className = "suggestion";
+      item.role = "option";
+      item.dataset.index = String(index);
+
+      const name = document.createElement("span");
+      name.className = "suggestion-name";
+      name.textContent = node.name;
+
+      const where = document.createElement("span");
+      where.className = "suggestion-where";
+      where.textContent = `${node.building} · Level ${node.floor}`;
+
+      item.append(name, where);
+      // mousedown, not click: it fires before the input loses focus, so the
+      // blur handler below cannot close the list out from under the tap.
+      item.addEventListener("mousedown", (event) => {
+        event.preventDefault();
+        choose(node);
+      });
+      list.appendChild(item);
+    });
+
+    list.hidden = false;
+    input.setAttribute("aria-expanded", "true");
+  }
+
+  function highlight(next) {
+    if (shown.length === 0) return;
+    highlighted = (next + shown.length) % shown.length;
+    for (const item of list.querySelectorAll(".suggestion")) {
+      item.classList.toggle(
+        "is-highlighted",
+        Number(item.dataset.index) === highlighted
+      );
+    }
+  }
+
+  input.addEventListener("input", () => {
+    // Typing after choosing means the choice no longer matches the text, so
+    // it has to be given up: otherwise the box could read one place while
+    // silently routing to another.
+    selectedId = null;
+    render(suggestionsFor(input.value));
+  });
+
+  input.addEventListener("focus", () => render(suggestionsFor(input.value)));
+
+  input.addEventListener("blur", () => close());
+
+  input.addEventListener("keydown", (event) => {
+    if (list.hidden && event.key === "ArrowDown") {
+      render(suggestionsFor(input.value));
+      return;
+    }
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      highlight(highlighted + 1);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      highlight(highlighted - 1);
+    } else if (event.key === "Enter") {
+      // Only swallow Enter when it is picking from the list; otherwise let it
+      // submit the form as usual.
+      if (!list.hidden && highlighted >= 0 && shown[highlighted]) {
+        event.preventDefault();
+        choose(shown[highlighted]);
+      }
+    } else if (event.key === "Escape") {
+      close();
+    }
+  });
+
+  return {
+    selectedId: () => selectedId,
+    typedText: () => input.value.trim(),
+    setNode: (node) => choose(node),
+  };
+}
+
+const originBox = createSearchBox(originInput, originSuggestions);
+const destinationBox = createSearchBox(destinationInput, destinationSuggestions);
+
+// --------------------------------------------------------------------------
+// Loading the list of places
+// --------------------------------------------------------------------------
 
 async function loadNodes() {
   showLoading("Loading locations…");
@@ -162,7 +281,7 @@ async function loadNodes() {
   try {
     response = await fetch(`${API_BASE_URL}/nodes`);
   } catch {
-    // Leave the button disabled: with no locations there is nothing to route
+    // Leave the button disabled: with no places there is nothing to route
     // between, so re-enabling it would only produce a second error.
     showError(unreachableBackendMessage());
     return;
@@ -186,16 +305,8 @@ async function loadNodes() {
     return;
   }
 
+  allNodes = nodes;
   nodesById = new Map(nodes.map((node) => [node.id, node]));
-
-  // Fall back to the first two nodes if the defaults are not in this graph.
-  const originId = nodesById.has(DEFAULT_ORIGIN) ? DEFAULT_ORIGIN : nodes[0]?.id;
-  const destinationId = nodesById.has(DEFAULT_DESTINATION)
-    ? DEFAULT_DESTINATION
-    : nodes[1]?.id;
-
-  fillDropdown(originSelect, nodes, originId);
-  fillDropdown(destinationSelect, nodes, destinationId);
 
   stopLoading();
 }
@@ -212,9 +323,7 @@ function formatSeconds(totalSeconds) {
   }
   const minutes = Math.floor(seconds / 60);
   const remainder = seconds % 60;
-  return remainder === 0
-    ? `${minutes} min`
-    : `${minutes} min ${remainder} sec`;
+  return remainder === 0 ? `${minutes} min` : `${minutes} min ${remainder} sec`;
 }
 
 /** 55.599999999999994 -> "55.6 m". Rounds away floating-point noise. */
@@ -222,20 +331,71 @@ function formatMetres(totalMetres) {
   return `${totalMetres.toFixed(1)} m`;
 }
 
-/** Fill one badge with a tick or a cross, plus a matching style. */
 function setBadge(element, isTrue, trueText, falseText) {
   element.textContent = isTrue ? `✓ ${trueText}` : `✗ ${falseText}`;
   element.className = isTrue ? "badge yes" : "badge no";
 }
 
-/** Look up a node's readable name; falls back to the id if it is unknown. */
 function nodeName(nodeId) {
   return nodesById.get(nodeId)?.name ?? nodeId;
 }
 
 // --------------------------------------------------------------------------
-// Showing a route
+// Walking through the steps
 // --------------------------------------------------------------------------
+
+/** Draw the step list, expanding whichever step the user is on. */
+function renderSteps() {
+  stepsList.replaceChildren();
+
+  currentSteps.forEach((step, index) => {
+    const item = document.createElement("li");
+    item.className = "step";
+    if (index === currentStepIndex) item.classList.add("is-current");
+    if (index < currentStepIndex) item.classList.add("is-done");
+
+    const heading = document.createElement("p");
+    heading.className = "step-instruction";
+    heading.textContent = step.instruction;
+    item.appendChild(heading);
+
+    // Only the step being walked shows its full description, so the list
+    // stays scannable.
+    if (index === currentStepIndex) {
+      const detail = document.createElement("p");
+      detail.className = "step-detail";
+      detail.textContent = step.detail;
+      item.appendChild(detail);
+
+      const meta = document.createElement("p");
+      meta.className = "step-meta";
+      meta.textContent = `${formatMetres(step.distance_m)} · ${formatSeconds(
+        step.walk_seconds
+      )} · arrives at ${nodeName(step.to_id)}`;
+      item.appendChild(meta);
+    }
+
+    stepsList.appendChild(item);
+  });
+
+  const arrived = currentStepIndex >= currentSteps.length;
+  if (arrived) {
+    const done = document.createElement("li");
+    done.className = "step is-current step-arrived";
+    done.textContent = "You have arrived.";
+    stepsList.appendChild(done);
+  }
+
+  stepProgress.textContent = arrived
+    ? "Journey complete"
+    : `Step ${currentStepIndex + 1} of ${currentSteps.length}`;
+
+  backButton.disabled = currentStepIndex === 0;
+  nextButton.disabled = arrived;
+  nextButton.textContent = currentStepIndex === currentSteps.length - 1
+    ? "I'm here"
+    : "Next step";
+}
 
 function showRoute(route) {
   clearOutput();
@@ -247,33 +407,43 @@ function showRoute(route) {
   setBadge(liftBadge, route.uses_lift, "Uses lift", "No lift");
   setBadge(shelterBadge, route.fully_sheltered, "Sheltered", "Partly exposed");
 
-  // Rebuild the step list from scratch each time.
-  stepsList.replaceChildren();
-  for (const nodeId of route.nodes) {
-    const item = document.createElement("li");
+  currentSteps = route.steps ?? [];
+  currentStepIndex = 0;
 
-    const name = document.createElement("span");
-    name.className = "step-name";
-    name.textContent = nodeName(nodeId);
-
-    const id = document.createElement("span");
-    id.className = "step-id";
-    id.textContent = nodeId;
-
-    item.append(name, id);
-    stepsList.appendChild(item);
-  }
-
-  // A route to where you already are has one node and no steps.
-  if (route.nodes.length === 1) {
+  if (currentSteps.length === 0) {
+    // Origin and destination are the same place.
+    stepsList.replaceChildren();
     const note = document.createElement("li");
-    note.className = "step-note";
+    note.className = "step step-arrived";
     note.textContent = "You are already there.";
     stepsList.appendChild(note);
+    stepProgress.textContent = "";
+    backButton.disabled = true;
+    nextButton.disabled = true;
+  } else {
+    renderSteps();
   }
 
   resultCard.hidden = false;
 }
+
+backButton.addEventListener("click", () => {
+  if (currentStepIndex > 0) {
+    currentStepIndex -= 1;
+    renderSteps();
+  }
+});
+
+nextButton.addEventListener("click", () => {
+  if (currentStepIndex < currentSteps.length) {
+    currentStepIndex += 1;
+    renderSteps();
+  }
+});
+
+// --------------------------------------------------------------------------
+// Asking for a route
+// --------------------------------------------------------------------------
 
 /** Read the preference controls into the shape POST /route expects. */
 function currentOptions() {
@@ -298,8 +468,6 @@ async function findRoute(origin, destination) {
       body: JSON.stringify({ origin, destination, ...currentOptions() }),
     });
   } catch {
-    // fetch only rejects when the request never got an answer: the backend is
-    // not running, the address is wrong, or the browser blocked it.
     stopLoading();
     showError(unreachableBackendMessage());
     return;
@@ -330,5 +498,17 @@ loadNodes();
 
 form.addEventListener("submit", (event) => {
   event.preventDefault(); // stay on the page instead of reloading
-  findRoute(originSelect.value, destinationSelect.value);
+
+  const origin = originBox.selectedId();
+  const destination = destinationBox.selectedId();
+
+  // A typed-but-unchosen box is the common mistake here, and sending its raw
+  // text would come back as a confusing "unknown node id" from the backend.
+  if (!origin || !destination) {
+    const missing = !origin ? "start" : "destination";
+    showError(`Pick a ${missing} from the suggestions list.`);
+    return;
+  }
+
+  findRoute(origin, destination);
 });

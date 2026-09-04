@@ -11,20 +11,47 @@
         <h1>Shortcut</h1>
         <p class="description">
           Find the quickest walking route between two points inside the Hive.
-          Pick where you are and where you want to go.
+          Start typing where you are and where you want to go.
         </p>
       </header>
 
       <!-- A form, so pressing Enter works the same as clicking the button. -->
-      <form id="route-form" class="card">
+      <form id="route-form" class="card" autocomplete="off">
         <div class="field">
-          <label for="origin">From</label>
-          <select id="origin" name="origin" required></select>
+          <label for="origin-input">I am at…</label>
+          <div class="combobox">
+            <input
+              type="text"
+              id="origin-input"
+              placeholder="Search for a place"
+              role="combobox"
+              aria-expanded="false"
+              aria-controls="origin-suggestions"
+              aria-autocomplete="list"
+            />
+            <ul id="origin-suggestions" class="suggestions" role="listbox" hidden></ul>
+          </div>
         </div>
 
         <div class="field">
-          <label for="destination">To</label>
-          <select id="destination" name="destination" required></select>
+          <label for="destination-input">I need to get to…</label>
+          <div class="combobox">
+            <input
+              type="text"
+              id="destination-input"
+              placeholder="Search for a place"
+              role="combobox"
+              aria-expanded="false"
+              aria-controls="destination-suggestions"
+              aria-autocomplete="list"
+            />
+            <ul
+              id="destination-suggestions"
+              class="suggestions"
+              role="listbox"
+              hidden
+            ></ul>
+          </div>
         </div>
 
         <fieldset class="options">
@@ -69,7 +96,7 @@
         <button type="submit" id="find-button">Find route</button>
       </form>
 
-      <!-- Only one of these three is ever visible at a time. -->
+      <!-- Only one of these is ever visible at a time. -->
       <p id="loading" class="status loading" hidden>Finding the best route…</p>
 
       <p id="error" class="status error" hidden></p>
@@ -94,8 +121,14 @@
           <li id="badge-shelter"></li>
         </ul>
 
-        <h3>Steps</h3>
+        <h3 id="steps-heading">Steps</h3>
+        <p id="step-progress" class="step-progress"></p>
         <ol id="route-steps" class="steps"></ol>
+
+        <div class="step-controls">
+          <button type="button" id="back-button" class="secondary">Back</button>
+          <button type="button" id="next-button">Next step</button>
+        </div>
       </section>
     </main>
 
