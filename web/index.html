@@ -7,128 +7,245 @@
   </head>
   <body>
     <main class="page">
-      <header>
-        <h1>Shortcut</h1>
-        <p class="description">
-          Find the quickest walking route between two points inside the Hive.
-          Start typing where you are and where you want to go.
-        </p>
+      <header class="page-header">
+        <div>
+          <h1>Shortcut</h1>
+          <p class="description">
+            Find the quickest walking route between two points inside the Hive.
+          </p>
+        </div>
+
+        <!-- No accounts yet: this only changes what this browser shows. The
+             review endpoints themselves are not protected. -->
+        <label class="admin-switch">
+          <input type="checkbox" id="admin-toggle" />
+          <span>Admin mode</span>
+        </label>
       </header>
 
-      <!-- A form, so pressing Enter works the same as clicking the button. -->
-      <form id="route-form" class="card" autocomplete="off">
-        <div class="field">
-          <label for="origin-input">I am at…</label>
-          <div class="combobox">
-            <input
-              type="text"
-              id="origin-input"
-              placeholder="Search for a place"
-              role="combobox"
-              aria-expanded="false"
-              aria-controls="origin-suggestions"
-              aria-autocomplete="list"
-            />
-            <ul id="origin-suggestions" class="suggestions" role="listbox" hidden></ul>
+      <!-- ============================ PLAN ============================ -->
+      <section id="plan-view">
+        <form id="route-form" class="card" autocomplete="off">
+          <div class="field">
+            <label for="origin-input">I am at…</label>
+            <div class="combobox">
+              <input
+                type="text"
+                id="origin-input"
+                placeholder="Search for a place"
+                role="combobox"
+                aria-expanded="false"
+                aria-controls="origin-suggestions"
+                aria-autocomplete="list"
+              />
+              <ul id="origin-suggestions" class="suggestions" role="listbox" hidden></ul>
+            </div>
           </div>
+
+          <div class="field">
+            <label for="destination-input">I need to get to…</label>
+            <div class="combobox">
+              <input
+                type="text"
+                id="destination-input"
+                placeholder="Search for a place"
+                role="combobox"
+                aria-expanded="false"
+                aria-controls="destination-suggestions"
+                aria-autocomplete="list"
+              />
+              <ul
+                id="destination-suggestions"
+                class="suggestions"
+                role="listbox"
+                hidden
+              ></ul>
+            </div>
+          </div>
+
+          <fieldset class="options">
+            <legend>Route preference</legend>
+
+            <label class="choice">
+              <input type="radio" name="preference" value="fastest" checked />
+              <span>
+                Fastest
+                <small>Whichever is quicker, stairs or lift</small>
+              </span>
+            </label>
+
+            <label class="choice">
+              <input type="radio" name="preference" value="prefer_lift" />
+              <span>
+                Less climbing
+                <small>Takes the lift where there is one</small>
+              </span>
+            </label>
+          </fieldset>
+
+          <fieldset class="options">
+            <legend>Only use</legend>
+
+            <label class="choice">
+              <input type="checkbox" id="allow-stairs" checked />
+              <span>Stairs allowed</span>
+            </label>
+
+            <label class="choice">
+              <input type="checkbox" id="allow-lift" checked />
+              <span>Lifts allowed</span>
+            </label>
+
+            <label class="choice">
+              <input type="checkbox" id="sheltered-only" />
+              <span>Sheltered corridors only</span>
+            </label>
+          </fieldset>
+
+          <button type="submit" id="find-button">Find route</button>
+        </form>
+
+        <p id="loading" class="status loading" hidden>Finding the best route…</p>
+        <p id="error" class="status error" hidden></p>
+
+        <section id="result" class="card result" hidden>
+          <h2>Your route</h2>
+
+          <dl class="totals">
+            <div>
+              <dt>Walking time</dt>
+              <dd id="total-time">—</dd>
+            </div>
+            <div>
+              <dt>Distance</dt>
+              <dd id="total-distance">—</dd>
+            </div>
+          </dl>
+
+          <ul class="badges">
+            <li id="badge-stairs"></li>
+            <li id="badge-lift"></li>
+            <li id="badge-shelter"></li>
+          </ul>
+
+          <h3>Steps</h3>
+          <p id="step-progress" class="step-progress"></p>
+          <ol id="route-steps" class="steps"></ol>
+
+          <div class="step-controls">
+            <button type="button" id="back-button" class="secondary">Back</button>
+            <button type="button" id="next-button">Next step</button>
+          </div>
+
+          <button type="button" id="report-problem-button" class="danger-outline">
+            Report a problem
+          </button>
+        </section>
+      </section>
+
+      <!-- =========================== REPORT =========================== -->
+      <section id="report-view" hidden>
+        <button type="button" class="link-button" data-back-to-plan>
+          ← Back to route
+        </button>
+
+        <form id="report-form" class="card" autocomplete="off">
+          <h2>What's happening here?</h2>
+
+          <div class="field">
+            <label for="report-place-input">Location</label>
+            <div class="combobox">
+              <input
+                type="text"
+                id="report-place-input"
+                placeholder="Search for a place"
+                role="combobox"
+                aria-expanded="false"
+                aria-controls="report-place-suggestions"
+                aria-autocomplete="list"
+              />
+              <ul
+                id="report-place-suggestions"
+                class="suggestions"
+                role="listbox"
+                hidden
+              ></ul>
+            </div>
+            <p class="hint">
+              Pick the place from the list so your report can be matched with
+              other people's.
+            </p>
+          </div>
+
+          <div class="field" id="report-where-field" hidden>
+            <label for="report-where">Where exactly?</label>
+            <select id="report-where"></select>
+          </div>
+
+          <fieldset class="options">
+            <legend>Condition</legend>
+            <div class="condition-grid" id="condition-grid">
+              <label class="condition">
+                <input type="radio" name="condition" value="construction" />
+                <span>Construction</span>
+              </label>
+              <label class="condition">
+                <input type="radio" name="condition" value="blocked" />
+                <span>Blocked</span>
+              </label>
+              <label class="condition">
+                <input type="radio" name="condition" value="flooded" />
+                <span>Flooded</span>
+              </label>
+              <label class="condition">
+                <input type="radio" name="condition" value="crowded" />
+                <span>Crowded</span>
+              </label>
+            </div>
+          </fieldset>
+
+          <div class="field">
+            <label for="report-notes">Notes</label>
+            <textarea
+              id="report-notes"
+              rows="3"
+              maxlength="500"
+              placeholder="Anything else worth knowing — exactly where, how bad, how long."
+            ></textarea>
+          </div>
+
+          <div class="photo-placeholder">
+            <span>Photo upload is not built yet</span>
+          </div>
+
+          <button type="submit" id="report-submit" class="danger">Submit</button>
+        </form>
+
+        <p id="report-status" class="status" hidden></p>
+      </section>
+
+      <!-- ============================ ADMIN =========================== -->
+      <section id="admin-view" hidden>
+        <button type="button" class="link-button" data-back-to-plan>
+          ← Back to route
+        </button>
+
+        <div class="card">
+          <h2>
+            Pending reports
+            <span id="pending-count" class="count-pill">0</span>
+          </h2>
+          <p class="hint">
+            Reports are grouped by the problem they describe. Approving applies
+            it to the map for everyone.
+          </p>
+          <button type="button" id="refresh-queue" class="secondary">
+            Refresh
+          </button>
         </div>
 
-        <div class="field">
-          <label for="destination-input">I need to get to…</label>
-          <div class="combobox">
-            <input
-              type="text"
-              id="destination-input"
-              placeholder="Search for a place"
-              role="combobox"
-              aria-expanded="false"
-              aria-controls="destination-suggestions"
-              aria-autocomplete="list"
-            />
-            <ul
-              id="destination-suggestions"
-              class="suggestions"
-              role="listbox"
-              hidden
-            ></ul>
-          </div>
-        </div>
-
-        <fieldset class="options">
-          <legend>Route preference</legend>
-
-          <label class="choice">
-            <input type="radio" name="preference" value="fastest" checked />
-            <span>
-              Fastest
-              <small>Whichever is quicker, stairs or lift</small>
-            </span>
-          </label>
-
-          <label class="choice">
-            <input type="radio" name="preference" value="prefer_lift" />
-            <span>
-              Less climbing
-              <small>Takes the lift where there is one</small>
-            </span>
-          </label>
-        </fieldset>
-
-        <fieldset class="options">
-          <legend>Only use</legend>
-
-          <label class="choice">
-            <input type="checkbox" id="allow-stairs" checked />
-            <span>Stairs allowed</span>
-          </label>
-
-          <label class="choice">
-            <input type="checkbox" id="allow-lift" checked />
-            <span>Lifts allowed</span>
-          </label>
-
-          <label class="choice">
-            <input type="checkbox" id="sheltered-only" />
-            <span>Sheltered corridors only</span>
-          </label>
-        </fieldset>
-
-        <button type="submit" id="find-button">Find route</button>
-      </form>
-
-      <!-- Only one of these is ever visible at a time. -->
-      <p id="loading" class="status loading" hidden>Finding the best route…</p>
-
-      <p id="error" class="status error" hidden></p>
-
-      <section id="result" class="card result" hidden>
-        <h2 id="result-heading">Your route</h2>
-
-        <dl class="totals">
-          <div>
-            <dt>Walking time</dt>
-            <dd id="total-time">—</dd>
-          </div>
-          <div>
-            <dt>Distance</dt>
-            <dd id="total-distance">—</dd>
-          </div>
-        </dl>
-
-        <ul class="badges">
-          <li id="badge-stairs"></li>
-          <li id="badge-lift"></li>
-          <li id="badge-shelter"></li>
-        </ul>
-
-        <h3 id="steps-heading">Steps</h3>
-        <p id="step-progress" class="step-progress"></p>
-        <ol id="route-steps" class="steps"></ol>
-
-        <div class="step-controls">
-          <button type="button" id="back-button" class="secondary">Back</button>
-          <button type="button" id="next-button">Next step</button>
-        </div>
+        <p id="admin-status" class="status" hidden></p>
+        <div id="report-queue"></div>
       </section>
     </main>
 

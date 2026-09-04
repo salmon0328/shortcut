@@ -139,7 +139,7 @@ def test_each_node_has_the_expected_shape(client: TestClient) -> None:
     body = client.get("/nodes").json()
 
     for node in body:
-        assert set(node) == {"id", "name", "building", "floor"}
+        assert set(node) == {"id", "name", "building", "floor", "condition"}
         assert isinstance(node["id"], str) and node["id"]
         assert isinstance(node["name"], str) and node["name"]
         assert isinstance(node["building"], str) and node["building"]
@@ -174,6 +174,7 @@ def test_a_known_node_carries_its_real_name_and_building(
         "name": "Staircase 1",
         "building": "Hive",
         "floor": "B5",
+        "condition": None,
     }
     assert by_id[DESTINATION]["name"] == "Side Entrance"
     assert by_id[DESTINATION]["floor"] == "B4"
@@ -186,6 +187,42 @@ def test_nodes_response_is_a_plain_list_not_wrapped_in_an_object(
     response = client.get("/nodes")
 
     assert isinstance(response.json(), list)
+
+
+# --------------------------------------------------------------------------
+# GET /edges
+# --------------------------------------------------------------------------
+
+
+def test_edges_returns_every_edge_in_the_graph(
+    client: TestClient, graph: CampusGraph
+) -> None:
+    body = client.get("/edges").json()
+
+    assert len(body) == len(graph.edges)
+    assert {edge["id"] for edge in body} == {edge.id for edge in graph.edges}
+
+
+def test_each_edge_has_the_expected_shape(client: TestClient) -> None:
+    body = client.get("/edges").json()
+
+    for edge in body:
+        assert set(edge) == {"id", "from_id", "to_id", "label", "blocked", "condition"}
+
+
+def test_an_edge_is_labelled_with_both_ends(client: TestClient) -> None:
+    """The report queue shows this, so it has to read as a place, not an id."""
+    by_id = {edge["id"]: edge for edge in client.get("/edges").json()}
+
+    assert by_id["Hive_B5_002"]["label"] == "Staircase 1 → Courtyard"
+
+
+def test_edge_endpoints_are_real_nodes(
+    client: TestClient, graph: CampusGraph
+) -> None:
+    for edge in client.get("/edges").json():
+        assert edge["from_id"] in graph.nodes
+        assert edge["to_id"] in graph.nodes
 
 
 # --------------------------------------------------------------------------
