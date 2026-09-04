@@ -50,6 +50,7 @@ from shortcut.overrides import (
     save_overrides,
     set_override,
 )
+from shortcut.floorplan_store import FloorplanStore, FloorplanStoreError
 from shortcut.photo_store import PhotoStore, PhotoStoreError
 from shortcut.report_store import (
     ROUTE_BLOCKING_CONDITIONS,
@@ -58,6 +59,8 @@ from shortcut.report_store import (
 )
 from shortcut.schemas import (
     EdgeSummary,
+    FloorplanCalibration,
+    FloorplanSummary,
     EdgeUpdateRequest,
     GraphChangeResult,
     NewEdgeRequest,
@@ -69,6 +72,8 @@ from shortcut.schemas import (
     ReportRequest,
     ReportSummary,
     ReviewResult,
+    RouteChoices,
+    RouteOption,
     RouteRequest,
     RouteResponse,
 )
@@ -76,8 +81,11 @@ from shortcut.tools.astar import (
     CostFunction,
     EdgeFilter,
     NoRouteFoundError,
+    Route,
     edge_seconds,
+    find_alternatives,
     find_route,
+    least_walking_cost,
     prefer_lift_cost,
 )
 
@@ -100,6 +108,7 @@ CAMPUS_GRAPH_PATH = PROJECT_ROOT / "data" / "campus_graph.json"
 REPORTS_PATH = PROJECT_ROOT / "data" / "reports.json"
 GRAPH_OVERRIDES_PATH = PROJECT_ROOT / "data" / "graph_overrides.json"
 PHOTOS_DIR = PROJECT_ROOT / "data" / "photos"
+FLOORPLANS_DIR = PROJECT_ROOT / "data" / "floorplans"
 
 
 # --------------------------------------------------------------------------
@@ -138,6 +147,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """
     app.state.reports = ReportStore(REPORTS_PATH)
     app.state.photos = PhotoStore(PHOTOS_DIR)
+    app.state.floorplans = FloorplanStore(FLOORPLANS_DIR)
     app.state.overrides_path = GRAPH_OVERRIDES_PATH
     app.state.graph = _load_graph_with_overrides(GRAPH_OVERRIDES_PATH)
     yield
@@ -216,6 +226,17 @@ def get_photos(request: Request) -> PhotoStore:
     return store
 
 
+def get_floorplans_store(request: Request) -> FloorplanStore:
+    """Hand the floorplan store to an endpoint."""
+    store: FloorplanStore | None = getattr(request.app.state, "floorplans", None)
+    if store is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="The floorplan store is not ready yet. Try again shortly.",
+        )
+    return store
+
+
 def _reload_graph(request: Request) -> CampusGraph:
     """Rebuild the running map from the survey file plus every override.
 
@@ -236,6 +257,8 @@ def cost_for(route_request: RouteRequest) -> CostFunction:
     """Pick the scoring function that matches the requested preference."""
     if route_request.preference == "prefer_lift":
         return prefer_lift_cost()
+    if route_request.preference == "least_walking":
+        return least_walking_cost()
     return edge_seconds
 
 
@@ -252,6 +275,8 @@ def edge_filter_for(route_request: RouteRequest) -> EdgeFilter | None:
         rules.append(lambda edge: not edge.stairs)
     if not route_request.allow_lift:
         rules.append(lambda edge: not edge.lift)
+    if not route_request.allow_shuttle:
+        rules.append(lambda edge: not edge.shuttle)
     if route_request.sheltered_only:
         rules.append(lambda edge: edge.covered)
 
@@ -271,9 +296,31 @@ def _restrictions_in_words(route_request: RouteRequest) -> str:
         restrictions.append("no stairs")
     if not route_request.allow_lift:
         restrictions.append("no lift")
+    if not route_request.allow_shuttle:
+        restrictions.append("no shuttle")
     if route_request.sheltered_only:
         restrictions.append("sheltered only")
     return ", ".join(restrictions)
+
+
+def _no_route_reason(route_request: RouteRequest) -> str:
+    """Why there was no route, naming the choices that ruled everything out."""
+    restrictions = _restrictions_in_words(route_request)
+    return (
+        f"No route matches your choices ({restrictions})."
+        if restrictions
+        else "Every connecting path may be blocked."
+    )
+
+
+def _photo_finder(photos: PhotoStore):
+    """A lookup a route response can use without knowing about photo storage."""
+
+    def find_photo(target_kind: str, target_id: str, facing: str | None) -> str | None:
+        photo = photos.find_best(target_kind, target_id, facing)
+        return f"/photos/{photo.id}/file" if photo else None
+
+    return find_photo
 
 
 # --------------------------------------------------------------------------
@@ -370,25 +417,15 @@ def post_route(
     except NoRouteFoundError as error:
         # Say which restrictions were in force: "no route" is far less useful
         # than "no route once you ruled out stairs and lifts".
-        restrictions = _restrictions_in_words(route_request)
-        reason = (
-            f"No route matches your choices ({restrictions})."
-            if restrictions
-            else "Every connecting path may be blocked."
-        )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=(
                 f"No walkable route from {error.origin!r} to "
-                f"{error.destination!r}. {reason}"
+                f"{error.destination!r}. {_no_route_reason(route_request)}"
             ),
         ) from error
 
-    def find_photo(target_kind: str, target_id: str, facing: str | None) -> str | None:
-        photo = photos.find_best(target_kind, target_id, facing)
-        return f"/photos/{photo.id}/file" if photo else None
-
-    return RouteResponse.from_route(route, graph, find_photo)
+    return RouteResponse.from_route(route, graph, _photo_finder(photos))
 
 
 # --------------------------------------------------------------------------
@@ -937,4 +974,262 @@ def delete_admin_addition(
         created=False,
         node_count=len(updated.nodes),
         edge_count=len(updated.edges),
+    )
+
+
+# --------------------------------------------------------------------------
+# Floorplans
+# --------------------------------------------------------------------------
+#
+# Nothing routes on these. A floorplan is what lets a frontend draw a route
+# instead of listing it, and none of the images or coordinates have been
+# collected yet, so most of this exists so the space is ready.
+
+
+@app.get(
+    "/floorplans",
+    response_model=list[FloorplanSummary],
+    summary="List floorplans, optionally for one floor",
+)
+def get_floorplans(
+    building: str | None = None,
+    floor: str | None = None,
+    floorplans: FloorplanStore = Depends(get_floorplans_store),
+) -> list[FloorplanSummary]:
+    if building and floor:
+        plan = floorplans.for_floor(building, floor)
+        return [FloorplanSummary.from_floorplan(plan)] if plan else []
+    return [FloorplanSummary.from_floorplan(plan) for plan in floorplans.all()]
+
+
+@app.get(
+    "/floorplans/{floorplan_id}/file",
+    summary="Fetch a floorplan image",
+    response_class=FileResponse,
+)
+def get_floorplan_file(
+    floorplan_id: str, floorplans: FloorplanStore = Depends(get_floorplans_store)
+) -> FileResponse:
+    plan = floorplans.get(floorplan_id)
+    if plan is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No floorplan {floorplan_id!r}.",
+        )
+    try:
+        path = floorplans.open_file(plan)
+    except FloorplanStoreError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(error)
+        ) from error
+    return FileResponse(path, media_type=plan.content_type)
+
+
+@app.post(
+    "/floorplans",
+    response_model=FloorplanSummary,
+    status_code=status.HTTP_201_CREATED,
+    summary="Upload a floorplan for one floor of one building",
+)
+async def post_floorplan(
+    file: UploadFile = File(description="The floorplan image."),
+    building: str = Form(description="Which building this is a plan of."),
+    floor: str = Form(description="Which floor."),
+    origin_x_m: float | None = Form(
+        default=None, description="Map x at the image's top-left corner."
+    ),
+    origin_y_m: float | None = Form(
+        default=None, description="Map y at the image's top-left corner."
+    ),
+    metres_per_pixel: float | None = Form(
+        default=None, description="How much ground one pixel covers."
+    ),
+    note: str = Form(default=""),
+    floorplans: FloorplanStore = Depends(get_floorplans_store),
+) -> FloorplanSummary:
+    """Store one floorplan image.
+
+    The measurements are optional: a plan can be uploaded now and calibrated
+    later, and stays marked uncalibrated until it is.
+    """
+    try:
+        plan = floorplans.add(
+            content=await file.read(),
+            content_type=file.content_type or "",
+            building=building,
+            floor=floor,
+            origin_x_m=origin_x_m,
+            origin_y_m=origin_y_m,
+            metres_per_pixel=metres_per_pixel,
+            note=note,
+        )
+    except FloorplanStoreError as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)
+        ) from error
+    return FloorplanSummary.from_floorplan(plan)
+
+
+@app.patch(
+    "/floorplans/{floorplan_id}",
+    response_model=FloorplanSummary,
+    summary="Set where the map sits on a floorplan image",
+)
+def patch_floorplan(
+    floorplan_id: str,
+    calibration: FloorplanCalibration,
+    floorplans: FloorplanStore = Depends(get_floorplans_store),
+) -> FloorplanSummary:
+    try:
+        plan = floorplans.calibrate(
+            floorplan_id,
+            origin_x_m=calibration.origin_x_m,
+            origin_y_m=calibration.origin_y_m,
+            metres_per_pixel=calibration.metres_per_pixel,
+            note=calibration.note,
+        )
+    except FloorplanStoreError as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)
+        ) from error
+
+    if plan is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No floorplan {floorplan_id!r}.",
+        )
+    return FloorplanSummary.from_floorplan(plan)
+
+
+@app.delete(
+    "/floorplans/{floorplan_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a floorplan",
+)
+def delete_floorplan(
+    floorplan_id: str, floorplans: FloorplanStore = Depends(get_floorplans_store)
+) -> None:
+    if not floorplans.delete(floorplan_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No floorplan {floorplan_id!r}.",
+        )
+
+
+# --------------------------------------------------------------------------
+# Other ways round
+# --------------------------------------------------------------------------
+
+# Which measure each preference is trying to keep down, and which one an
+# alternative should therefore improve on. Asking for the fastest route and
+# being offered a slightly slower one that walks you less is useful; being
+# offered one that is worse at both is not.
+_TRADE_AXIS = {
+    "fastest": ("seconds", "walking"),
+    "prefer_lift": ("seconds", "walking"),
+    "least_walking": ("walking", "seconds"),
+}
+
+_PREFERENCE_LABELS = {
+    "fastest": "Fastest",
+    "prefer_lift": "Less climbing",
+    "least_walking": "Less walking",
+}
+
+
+def _describe_trade(option: Route, against: Route) -> str:
+    """Say plainly what an alternative gives and what it costs."""
+    parts: list[str] = []
+
+    walking_saved = against.walking_distance_m - option.walking_distance_m
+    if abs(walking_saved) >= 1:
+        word = "less" if walking_saved > 0 else "more"
+        parts.append(f"{abs(walking_saved):.0f} m {word} walking")
+
+    seconds_saved = against.total_seconds - option.total_seconds
+    if abs(seconds_saved) >= 1:
+        word = "faster" if seconds_saved > 0 else "slower"
+        parts.append(f"{abs(seconds_saved) / 60:.0f} min {word}"
+                     if abs(seconds_saved) >= 60
+                     else f"{abs(seconds_saved):.0f} sec {word}")
+
+    return ", ".join(parts) if parts else "About the same, a different way round"
+
+
+@app.post(
+    "/route/options",
+    response_model=RouteChoices,
+    summary="Find a route, plus other ways round worth considering",
+    responses={404: {"description": "Unknown node id, or nothing connects the two."}},
+)
+def post_route_options(
+    route_request: RouteRequest,
+    graph: CampusGraph = Depends(get_graph),
+    photos: PhotoStore = Depends(get_photos),
+) -> RouteChoices:
+    """Return the best route for the request, and up to two alternatives.
+
+    An alternative is only offered when it beats the chosen route on the
+    measure that route was *not* optimising: ask for the fastest way and you
+    are shown one that walks you less, ask to walk less and you are shown one
+    that is quicker.
+    """
+    cost = cost_for(route_request)
+    edge_filter = edge_filter_for(route_request)
+
+    try:
+        best = find_route(
+            graph,
+            route_request.origin,
+            route_request.destination,
+            cost=cost,
+            edge_filter=edge_filter,
+        )
+    except UnknownNodeError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Unknown node id {error.node_id!r}.",
+        ) from error
+    except NoRouteFoundError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                f"No walkable route from {error.origin!r} to "
+                f"{error.destination!r}. {_no_route_reason(route_request)}"
+            ),
+        ) from error
+
+    keep_axis, trade_axis = _TRADE_AXIS[route_request.preference]
+    others = find_alternatives(
+        graph,
+        route_request.origin,
+        route_request.destination,
+        best,
+        trade_axis=trade_axis,
+        keep_axis=keep_axis,
+        cost=cost,
+        edge_filter=edge_filter,
+    )
+
+    def as_option(route: Route, label: str, why: str) -> RouteOption:
+        return RouteOption(
+            label=label,
+            why=why,
+            route=RouteResponse.from_route(route, graph, _photo_finder(photos)),
+        )
+
+    return RouteChoices(
+        primary=as_option(
+            best,
+            _PREFERENCE_LABELS[route_request.preference],
+            "The best match for what you asked for",
+        ),
+        alternatives=[
+            as_option(
+                route,
+                "Less walking" if trade_axis == "walking" else "Quicker",
+                _describe_trade(route, best),
+            )
+            for route in others
+        ],
     )

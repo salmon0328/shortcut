@@ -751,3 +751,216 @@ code {
   padding: 0.25rem 0.625rem;
   font-size: 0.8rem;
 }
+
+/* ==========================================================================
+   Map and layout
+   ==========================================================================
+   Phone first: the map sits on top and the controls sit under it, the way the
+   sketch shows. From 900px there is room to put them side by side instead, so
+   the controls become a side panel and the map takes the rest, which is the
+   same content laid out sideways rather than a second design.
+   ========================================================================== */
+
+.layout {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.map-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 14rem;
+  height: 40vh;
+}
+
+.map-canvas {
+  position: relative;
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 0.5rem;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+}
+
+.map-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.map-placeholder {
+  max-width: 22rem;
+  padding: 1rem;
+  text-align: center;
+}
+
+.map-placeholder-title {
+  margin: 0;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.map-placeholder-detail {
+  margin: 0.375rem 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.map-note {
+  position: absolute;
+  left: 0.5rem;
+  right: 0.5rem;
+  bottom: 0.5rem;
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8rem;
+  color: var(--no);
+  background: #fdf3e0;
+  border-radius: 0.375rem;
+}
+
+/* --- the route drawn on a plan --- */
+
+.map-route-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.85;
+}
+
+.map-pin {
+  fill: var(--accent);
+  stroke: #fff;
+  stroke-width: 2;
+}
+
+.map-pin.start {
+  fill: var(--yes);
+}
+
+.map-pin.end {
+  fill: #c0392b;
+}
+
+/* --- switching floors --- */
+
+.map-floors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.floor-tab {
+  width: auto;
+  padding: 0.3rem 0.75rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  background: var(--card);
+  border: 1px solid var(--line);
+}
+
+.floor-tab.is-active {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.floor-tab:hover:not(.is-active) {
+  background: var(--page);
+}
+
+/* --- totals --- */
+
+.total-extra {
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* --- other ways round --- */
+
+#show-options {
+  margin-top: 1rem;
+}
+
+.route-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.route-option {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  width: 100%;
+  padding: 0.625rem 0.75rem;
+  text-align: left;
+  color: var(--ink);
+  background: var(--page);
+  border: 1px solid var(--line);
+  border-radius: 0.375rem;
+}
+
+.route-option:hover {
+  background: #e8ecf1;
+}
+
+.route-option.is-current {
+  background: #eef4fd;
+  border-color: var(--accent);
+}
+
+.route-option-label {
+  font-weight: 600;
+}
+
+.route-option-why,
+.route-option-numbers {
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+/* ==========================================================================
+   Wider screens
+   ========================================================================== */
+
+@media (min-width: 900px) {
+  .page {
+    max-width: 76rem;
+  }
+
+  .layout {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+
+  .control-panel {
+    flex: 0 0 26rem;
+    max-width: 26rem;
+  }
+
+  .map-panel {
+    position: sticky;
+    top: 1rem;
+    flex: 1;
+    order: 2;
+    height: calc(100vh - 10rem);
+  }
+
+  /* The other screens stay a single readable column rather than stretching
+     across a wide window. */
+  #report-view,
+  #admin-view {
+    max-width: 34rem;
+  }
+}

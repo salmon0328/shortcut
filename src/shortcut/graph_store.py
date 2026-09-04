@@ -136,6 +136,14 @@ class Edge:
     covered: bool = False
     stairs: bool = False
     lift: bool = False
+    # A ride rather than a walk: a shuttle bus between two stops. The distance
+    # is still the real distance covered, but none of it is walked, which is
+    # what CampusGraph users care about when someone asks to walk less.
+    shuttle: bool = False
+    # Typical time spent waiting before this edge can be used, on top of
+    # walk_seconds. Only meaningful for a shuttle today; a live timetable can
+    # keep it up to date later without anything else changing.
+    wait_seconds: float = 0.0
     blocked: bool = False
     one_way: bool = False
     # Hand-written or (later) AI-written walking directions. Two fields
@@ -151,6 +159,16 @@ class Edge:
     # report rather than written into the graph file by hand.
     condition: str | None = None
     extra: dict[str, Any] = field(default_factory=dict, repr=False)
+
+    @property
+    def walking_distance_m(self) -> float:
+        """How much of this edge is covered on foot. Zero for a shuttle ride."""
+        return 0.0 if self.shuttle else self.distance_m
+
+    @property
+    def total_seconds(self) -> float:
+        """Time to get across this edge, including any wait before it."""
+        return self.walk_seconds + self.wait_seconds
 
     def other_end(self, node_id: NodeId) -> NodeId:
         """Return the node at the far end of this edge.
@@ -264,6 +282,20 @@ def _optional_text(raw: dict[str, Any], key: str, where: str) -> str | None:
     return stripped or None
 
 
+def _optional_number_or(
+    raw: dict[str, Any], key: str, where: str, default: float = 0.0
+) -> float:
+    """A number that may be absent, falling back to ``default``."""
+    value = _optional_number(raw, key, where)
+    if value is None:
+        return default
+    if value < 0:
+        raise GraphSchemaError(
+            f"{where}: field {key!r} must not be negative, got {value!r}."
+        )
+    return value
+
+
 def _optional_bool(raw: dict[str, Any], key: str, where: str, default: bool = False) -> bool:
     value = raw.get(key, default)
     if not isinstance(value, bool):
@@ -338,7 +370,8 @@ def _parse_edge_at(raw: Any, where: str) -> Edge:
     edge_id = _optional_str(raw, "id", where, default=f"{from_id}--{to_id}")
     known_keys = {
         "id", "from", "to", "distance_m", "walk_seconds",
-        "covered", "stairs", "lift", "blocked", "one_way",
+        "covered", "stairs", "lift", "shuttle", "wait_seconds",
+        "blocked", "one_way",
         "directions_forward", "directions_reverse", "condition",
     }
     return Edge(
@@ -350,6 +383,8 @@ def _parse_edge_at(raw: Any, where: str) -> Edge:
         covered=_optional_bool(raw, "covered", where),
         stairs=_optional_bool(raw, "stairs", where),
         lift=_optional_bool(raw, "lift", where),
+        shuttle=_optional_bool(raw, "shuttle", where),
+        wait_seconds=_optional_number_or(raw, "wait_seconds", where),
         blocked=_optional_bool(raw, "blocked", where),
         one_way=_optional_bool(raw, "one_way", where),
         directions_forward=_optional_text(raw, "directions_forward", where),

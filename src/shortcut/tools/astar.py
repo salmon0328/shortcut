@@ -31,7 +31,10 @@ __all__ = [
     "edge_seconds",
     "edge_metres",
     "prefer_lift_cost",
+    "least_walking_cost",
     "DEFAULT_STAIRS_PENALTY_SECONDS",
+    "DEFAULT_WALKING_WEIGHT",
+    "find_alternatives",
     "zero_heuristic",
     "heuristic_for",
     "find_route",
@@ -86,8 +89,15 @@ class Route:
     edge_ids: tuple[str, ...]
     total_seconds: float
     total_distance_m: float
+    # How far of the total is actually covered on foot. Differs from
+    # total_distance_m only when part of the journey is a shuttle ride.
+    walking_distance_m: float = 0.0
+    # Time spent waiting, e.g. for a shuttle. Not included in total_seconds,
+    # which is time spent moving.
+    total_wait_seconds: float = 0.0
     uses_stairs: bool = False
     uses_lift: bool = False
+    uses_shuttle: bool = False
     # True only when *every* edge on the route is covered. A route with no
     # edges at all (origin == destination) counts as sheltered: you do not go
     # outside if you do not move.
@@ -125,8 +135,13 @@ class Route:
 
 
 def edge_seconds(edge: Edge) -> float:
-    """Default cost: estimated walking time in seconds."""
-    return edge.walk_seconds
+    """Default cost: time to get across, including any wait beforehand.
+
+    A shuttle you have to stand around for is genuinely slower than one that
+    is already there, so the wait belongs in the score rather than being a
+    surprise on arrival.
+    """
+    return edge.total_seconds
 
 
 def edge_metres(edge: Edge) -> float:
@@ -157,7 +172,30 @@ def prefer_lift_cost(
     """
 
     def cost(edge: Edge) -> float:
-        return edge.walk_seconds + (stairs_penalty_seconds if edge.stairs else 0.0)
+        return edge.total_seconds + (stairs_penalty_seconds if edge.stairs else 0.0)
+
+    return cost
+
+
+# How many seconds of travelling someone would accept to avoid walking one
+# metre. Above roughly 0.7 the route starts preferring to ride, which is the
+# point; 10 makes walking clearly the last resort while still breaking ties by
+# time, so it never dawdles when the walking is equal.
+DEFAULT_WALKING_WEIGHT = 10.0
+
+
+def least_walking_cost(
+    walking_weight: float = DEFAULT_WALKING_WEIGHT,
+) -> CostFunction:
+    """Time, with every walked metre charged extra.
+
+    Not the same as minimising distance: a staircase is a short distance but
+    still walking, while a shuttle covers ground without any. This scores what
+    someone actually means by "I would rather not walk".
+    """
+
+    def cost(edge: Edge) -> float:
+        return edge.total_seconds + edge.walking_distance_m * walking_weight
 
     return cost
 
@@ -273,8 +311,11 @@ def _build_route(
         edge_ids=tuple(edge.id for edge in edges),
         total_seconds=sum(edge.walk_seconds for edge in edges),
         total_distance_m=sum(edge.distance_m for edge in edges),
+        walking_distance_m=sum(edge.walking_distance_m for edge in edges),
+        total_wait_seconds=sum(edge.wait_seconds for edge in edges),
         uses_stairs=any(edge.stairs for edge in edges),
         uses_lift=any(edge.lift for edge in edges),
+        uses_shuttle=any(edge.shuttle for edge in edges),
         # "all" not "any": one uncovered corridor makes the whole walk unsheltered.
         fully_sheltered=all(edge.covered for edge in edges),
         nodes_expanded=nodes_expanded,
@@ -387,3 +428,79 @@ def find_route_or_none(
         return find_route(graph, origin, destination, **kwargs)  # type: ignore[arg-type]
     except (UnknownNodeError, NoRouteFoundError):
         return None
+
+
+# --------------------------------------------------------------------------
+# Other ways round
+# --------------------------------------------------------------------------
+
+
+def _is_better_on(route: Route, than: Route, axis: str) -> bool:
+    """Whether ``route`` beats ``than`` on one measure, by enough to mention."""
+    if axis == "seconds":
+        return route.total_seconds < than.total_seconds - 0.5
+    return route.walking_distance_m < than.walking_distance_m - 0.5
+
+
+def _worse_by(route: Route, than: Route, axis: str) -> float:
+    """How much ``route`` gives up against ``than`` on one measure."""
+    if axis == "seconds":
+        return route.total_seconds - than.total_seconds
+    return route.walking_distance_m - than.walking_distance_m
+
+
+def find_alternatives(
+    graph: CampusGraph,
+    origin: NodeId,
+    destination: NodeId,
+    best: Route,
+    *,
+    trade_axis: str = "walking",
+    keep_axis: str = "seconds",
+    limit: int = 2,
+    cost: CostFunction = edge_seconds,
+    edge_filter: EdgeFilter | None = None,
+) -> list[Route]:
+    """Find other ways round that trade one measure against the other.
+
+    ``best`` is the route already chosen. An alternative has to actually
+    improve on ``trade_axis`` (there is no point offering a route that is
+    worse at everything), and among those, the ones giving up least on
+    ``keep_axis`` come first.
+
+    Candidates are produced by taking one edge of the best route out of play
+    at a time and searching again. That is the standard way to find genuinely
+    different paths rather than near-copies, and it stays deterministic: the
+    same graph and the same request always give the same list.
+    """
+    if not best.edge_ids:
+        return []
+
+    seen: set[tuple[NodeId, ...]] = {best.node_ids}
+    found: list[Route] = []
+
+    for blocked_edge_id in best.edge_ids:
+
+        def without_that_edge(edge: Edge) -> bool:
+            if edge.id == blocked_edge_id:
+                return False
+            return edge_filter(edge) if edge_filter else True
+
+        candidate = find_route_or_none(
+            graph,
+            origin,
+            destination,
+            cost=cost,
+            edge_filter=without_that_edge,
+        )
+        if candidate is None or candidate.node_ids in seen:
+            continue
+
+        seen.add(candidate.node_ids)
+        if _is_better_on(candidate, best, trade_axis):
+            found.append(candidate)
+
+    # Least given up on the measure the caller asked to keep, first. The node
+    # ids break ties so the order never depends on which edge was removed.
+    found.sort(key=lambda route: (_worse_by(route, best, keep_axis), route.node_ids))
+    return found[:limit]

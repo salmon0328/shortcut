@@ -139,7 +139,15 @@ def test_each_node_has_the_expected_shape(client: TestClient) -> None:
     body = client.get("/nodes").json()
 
     for node in body:
-        assert set(node) == {"id", "name", "building", "floor", "condition"}
+        assert set(node) == {
+            "id",
+            "name",
+            "building",
+            "floor",
+            "condition",
+            "x",
+            "y",
+        }
         assert isinstance(node["id"], str) and node["id"]
         assert isinstance(node["name"], str) and node["name"]
         assert isinstance(node["building"], str) and node["building"]
@@ -175,6 +183,9 @@ def test_a_known_node_carries_its_real_name_and_building(
         "building": "Hive",
         "floor": "B5",
         "condition": None,
+        # Nothing has been surveyed onto a floorplan yet.
+        "x": None,
+        "y": None,
     }
     assert by_id[DESTINATION]["name"] == "Side Entrance"
     assert by_id[DESTINATION]["floor"] == "B4"
@@ -217,6 +228,8 @@ def test_each_edge_has_the_expected_shape(client: TestClient) -> None:
             "covered",
             "stairs",
             "lift",
+            "shuttle",
+            "wait_seconds",
             "blocked",
             "condition",
         }
@@ -267,8 +280,11 @@ def test_route_response_matches_the_schema(client: TestClient) -> None:
         "steps",
         "total_distance_m",
         "total_walk_seconds",
+        "total_wait_seconds",
+        "walking_distance_m",
         "uses_stairs",
         "uses_lift",
+        "uses_shuttle",
         "fully_sheltered",
     }
 

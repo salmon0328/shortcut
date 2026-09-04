@@ -255,7 +255,21 @@ function addConnectionRow() {
   const covered = checkboxField("Sheltered", true);
   const stairs = checkboxField("Stairs", false);
   const lift = checkboxField("Lift", false);
-  flags.append(covered.label, stairs.label, lift.label);
+  const shuttle = checkboxField("Shuttle ride", false);
+  flags.append(covered.label, stairs.label, lift.label, shuttle.label);
+
+  // How long people usually wait only means anything for a ride, so it stays
+  // out of the way until this link is marked as one.
+  const wait = numberField(
+    "Typical wait (seconds)",
+    "e.g. 300 — blank means no wait",
+    "1"
+  );
+  wait.input.required = false;
+  wait.wrapper.hidden = true;
+  shuttle.input.addEventListener("change", () => {
+    wait.wrapper.hidden = !shuttle.input.checked;
+  });
 
   const remove = document.createElement("button");
   remove.type = "button";
@@ -270,6 +284,8 @@ function addConnectionRow() {
     covered: covered.input,
     stairs: stairs.input,
     lift: lift.input,
+    shuttle: shuttle.input,
+    wait: wait.input,
   };
 
   remove.addEventListener("click", () => {
@@ -278,7 +294,7 @@ function addConnectionRow() {
     refreshNewNodeFacing();
   });
 
-  row.append(searchField, numbers, flags, remove);
+  row.append(searchField, numbers, flags, wait.wrapper, remove);
   connectionRows.appendChild(row);
   connectionRowState.push(state);
   refreshNewNodeFacing();
@@ -324,6 +340,13 @@ function readConnections(nodeId) {
       covered: row.covered.checked,
       stairs: row.stairs.checked,
       lift: row.lift.checked,
+      shuttle: row.shuttle.checked,
+      // Blank is a real answer here, unlike distance and time: it means the
+      // bus is usually already there.
+      wait_seconds:
+        row.shuttle.checked && row.wait.value.trim() !== ""
+          ? Number(row.wait.value)
+          : 0,
     };
   });
 }
@@ -384,6 +407,14 @@ addForm.addEventListener("submit", async (event) => {
 const addEdgeForm = document.querySelector("#add-edge-form");
 const linkDistance = document.querySelector("#link-distance");
 const linkSeconds = document.querySelector("#link-seconds");
+const linkShuttle = document.querySelector("#link-shuttle");
+const linkWaitField = document.querySelector("#link-wait-field");
+const linkWait = document.querySelector("#link-wait");
+
+// The wait only means anything for a ride, so it appears with one.
+linkShuttle.addEventListener("change", () => {
+  linkWaitField.hidden = !linkShuttle.checked;
+});
 
 const linkFromBox = createSearchBox(
   document.querySelector("#link-from-input"),
@@ -435,14 +466,22 @@ addEdgeForm.addEventListener("submit", async (event) => {
       covered: document.querySelector("#link-covered").checked,
       stairs: document.querySelector("#link-stairs").checked,
       lift: document.querySelector("#link-lift").checked,
+      shuttle: linkShuttle.checked,
+      wait_seconds:
+        linkShuttle.checked && linkWait.value.trim() !== ""
+          ? Number(linkWait.value)
+          : 0,
     });
     await loadReferenceData();
+    const kind = linkShuttle.checked ? "Shuttle from" : "Linked";
     const message =
-      `Linked ${nodeName(fromId)} to ${nodeName(toId)}. ` +
+      `${kind} ${nodeName(fromId)} to ${nodeName(toId)}. ` +
       `The map now has ${result.edge_count} links.`;
     addEdgeForm.reset();
     linkFromBox.clear();
     linkToBox.clear();
+    // reset() unchecks the box, so the wait field has to follow it back.
+    linkWaitField.hidden = true;
     showStatus(message, "success");
   } catch (error) {
     showStatus(error.message, "error");

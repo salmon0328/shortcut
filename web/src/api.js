@@ -71,6 +71,16 @@ function postJson(path, payload) {
 export const fetchNodes = () => request("/nodes");
 export const fetchEdges = () => request("/edges");
 export const requestRoute = (payload) => postJson("/route", payload);
+
+/** The same route, plus other ways round worth considering. */
+export const requestRouteOptions = (payload) => postJson("/route/options", payload);
+
+/** The floorplan for one floor, or null when nobody has uploaded one yet. */
+export async function fetchFloorplan(building, floor) {
+  const query = new URLSearchParams({ building, floor });
+  const found = await request(`/floorplans?${query}`);
+  return Array.isArray(found) && found.length > 0 ? found[0] : null;
+}
 export const submitReport = (payload) => postJson("/reports", payload);
 export const fetchReportGroups = () => request("/reports/groups");
 

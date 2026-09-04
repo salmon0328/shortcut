@@ -22,6 +22,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from shortcut.directions import step_text
+from shortcut.floorplan_store import Floorplan
 from shortcut.graph_store import CampusGraph, Edge, Node
 from shortcut.photo_store import Photo
 from shortcut.report_store import (
@@ -50,12 +51,16 @@ __all__ = [
     "NodeUpdateRequest",
     "EdgeUpdateRequest",
     "GraphChangeResult",
+    "FloorplanSummary",
+    "FloorplanCalibration",
+    "RouteOption",
+    "RouteChoices",
 ]
 
 
 # How a caller wants a route scored. Anything outside this set is rejected by
 # Pydantic with a 422 naming the allowed values.
-RoutePreference = Literal["fastest", "prefer_lift"]
+RoutePreference = Literal["fastest", "prefer_lift", "least_walking"]
 
 
 # --------------------------------------------------------------------------
@@ -99,6 +104,14 @@ class NodeSummary(BaseModel):
         default=None,
         description="A known problem here, e.g. 'crowded', from an approved report.",
     )
+    x: float | None = Field(
+        default=None,
+        description=(
+            "Position on the floorplan, in metres. None until the place has "
+            "been surveyed, which is why a map cannot draw it yet."
+        ),
+    )
+    y: float | None = Field(default=None, description="Position on the floorplan.")
 
     @classmethod
     def from_node(cls, node: Node) -> "NodeSummary":
@@ -109,6 +122,8 @@ class NodeSummary(BaseModel):
             building=node.building,
             floor=node.floor,
             condition=node.condition,
+            x=node.x,
+            y=node.y,
         )
 
 
@@ -143,6 +158,10 @@ class EdgeSummary(BaseModel):
     covered: bool = Field(default=False, description="True if sheltered from weather.")
     stairs: bool = Field(default=False, description="True if it is a staircase.")
     lift: bool = Field(default=False, description="True if it is a lift.")
+    shuttle: bool = Field(default=False, description="True if it is a shuttle ride.")
+    wait_seconds: float = Field(
+        default=0.0, ge=0, description="Typical wait before boarding."
+    )
     blocked: bool = Field(default=False, description="True if currently closed.")
     condition: str | None = Field(
         default=None, description="A known problem here, from an approved report."
@@ -160,6 +179,8 @@ class EdgeSummary(BaseModel):
             covered=edge.covered,
             stairs=edge.stairs,
             lift=edge.lift,
+            shuttle=edge.shuttle,
+            wait_seconds=edge.wait_seconds,
             blocked=edge.blocked,
             condition=edge.condition,
         )
@@ -213,8 +234,10 @@ class RouteRequest(BaseModel):
         description=(
             "How to score a route. 'fastest' minimises walking time. "
             "'prefer_lift' also minimises time but heavily penalises stairs, "
-            "so a lift is chosen wherever one exists. This is a soft "
-            "preference: stairs are still used if there is no other way."
+            "so a lift is chosen wherever one exists. 'least_walking' charges "
+            "for every metre covered on foot, so a shuttle ride beats a long "
+            "walk. All are soft preferences: nothing is ruled out entirely, "
+            "so a route is still found when there is only one way."
         ),
     )
     allow_stairs: bool = Field(
@@ -224,6 +247,10 @@ class RouteRequest(BaseModel):
     allow_lift: bool = Field(
         default=True,
         description="Set false to refuse any route that uses a lift.",
+    )
+    allow_shuttle: bool = Field(
+        default=True,
+        description="Set false to refuse any route that uses a shuttle.",
     )
     sheltered_only: bool = Field(
         default=False,
@@ -283,6 +310,12 @@ class RouteStep(BaseModel):
     stairs: bool = Field(default=False, description="True if this step uses stairs.")
     lift: bool = Field(default=False, description="True if this step uses a lift.")
     covered: bool = Field(default=False, description="True if this step is sheltered.")
+    shuttle: bool = Field(
+        default=False, description="True if this step is a ride, not a walk."
+    )
+    wait_seconds: float = Field(
+        default=0.0, ge=0, description="Typical wait before this step can start."
+    )
     condition: str | None = Field(
         default=None,
         description=(
@@ -350,7 +383,21 @@ class RouteResponse(BaseModel):
     )
     total_walk_seconds: float = Field(
         ge=0,
-        description="Total estimated walking time in seconds.",
+        description=(
+            "Total time spent moving, in seconds. Includes time on a lift or "
+            "a shuttle, which is travelling rather than strictly walking."
+        ),
+    )
+    total_wait_seconds: float = Field(
+        default=0.0, ge=0, description="Time spent waiting, e.g. for a shuttle."
+    )
+    walking_distance_m: float = Field(
+        default=0.0,
+        ge=0,
+        description=(
+            "How much of the distance is covered on foot. Lower than "
+            "total_distance_m whenever part of the way is a shuttle ride."
+        ),
     )
     uses_stairs: bool = Field(
         default=False,
@@ -359,6 +406,10 @@ class RouteResponse(BaseModel):
     uses_lift: bool = Field(
         default=False,
         description="True if any part of the route uses a lift.",
+    )
+    uses_shuttle: bool = Field(
+        default=False,
+        description="True if any part of the route is a shuttle ride.",
     )
     fully_sheltered: bool = Field(
         default=True,
@@ -433,6 +484,8 @@ class RouteResponse(BaseModel):
                     stairs=edge.stairs,
                     lift=edge.lift,
                     covered=edge.covered,
+                    shuttle=edge.shuttle,
+                    wait_seconds=edge.wait_seconds,
                     condition=edge.condition,
                     photo_url=photo_url,
                 )
@@ -444,8 +497,11 @@ class RouteResponse(BaseModel):
             steps=steps,
             total_distance_m=route.total_distance_m,
             total_walk_seconds=route.total_seconds,
+            total_wait_seconds=route.total_wait_seconds,
+            walking_distance_m=route.walking_distance_m,
             uses_stairs=route.uses_stairs,
             uses_lift=route.uses_lift,
+            uses_shuttle=route.uses_shuttle,
             fully_sheltered=route.fully_sheltered,
         )
 
@@ -672,6 +728,12 @@ class NewEdgeRequest(BaseModel):
     covered: bool = Field(default=False, description="True if sheltered from weather.")
     stairs: bool = Field(default=False, description="True if it is a staircase.")
     lift: bool = Field(default=False, description="True if it is a lift.")
+    shuttle: bool = Field(
+        default=False, description="True if this is a shuttle ride between stops."
+    )
+    wait_seconds: float = Field(
+        default=0.0, ge=0, description="Typical wait before boarding."
+    )
     one_way: bool = Field(
         default=False, description="True if it can only be walked from -> to."
     )
@@ -696,6 +758,8 @@ class NewEdgeRequest(BaseModel):
             "covered": self.covered,
             "stairs": self.stairs,
             "lift": self.lift,
+            "shuttle": self.shuttle,
+            "wait_seconds": self.wait_seconds,
             "one_way": self.one_way,
         }
 
@@ -739,6 +803,10 @@ class NewNodeRequest(BaseModel):
         max_length=40,
         description="What kind of place, e.g. 'junction', 'lift', 'stairs'.",
     )
+    x: float | None = Field(
+        default=None, description="Position on the floorplan, in metres."
+    )
+    y: float | None = Field(default=None, description="Position on the floorplan.")
     connections: list[NewEdgeRequest] = Field(
         default_factory=list,
         description=(
@@ -762,12 +830,19 @@ class NewNodeRequest(BaseModel):
         return self
 
     def to_fields(self) -> dict:
-        return {
+        fields = {
             "name": self.name,
             "building": self.building,
             "floor": self.floor,
             "type": self.type,
         }
+        # Left out entirely when unknown, so an unsurveyed place stays plainly
+        # unsurveyed rather than sitting at the origin of the map.
+        if self.x is not None:
+            fields["x"] = self.x
+        if self.y is not None:
+            fields["y"] = self.y
+        return fields
 
 
 class NodeUpdateRequest(BaseModel):
@@ -782,6 +857,8 @@ class NodeUpdateRequest(BaseModel):
     condition: str | None = Field(
         default=None, description="A known problem here, or empty to clear it."
     )
+    x: float | None = Field(default=None, description="Position on the floorplan.")
+    y: float | None = Field(default=None, description="Position on the floorplan.")
 
     def changed_fields(self) -> dict:
         return self.model_dump(exclude_none=True)
@@ -797,6 +874,8 @@ class EdgeUpdateRequest(BaseModel):
     covered: bool | None = None
     stairs: bool | None = None
     lift: bool | None = None
+    shuttle: bool | None = None
+    wait_seconds: float | None = Field(default=None, ge=0)
     one_way: bool | None = None
     blocked: bool | None = None
     condition: str | None = None
@@ -827,3 +906,103 @@ class GraphChangeResult(BaseModel):
     )
     node_count: int = Field(description="Places on the map after the change.")
     edge_count: int = Field(description="Links on the map after the change.")
+
+
+# --------------------------------------------------------------------------
+# Floorplans
+# --------------------------------------------------------------------------
+
+
+class FloorplanSummary(BaseModel):
+    """One floor of one building, as a picture, and where the map sits on it.
+
+    ``is_calibrated`` is the field that matters to a frontend: until it is
+    true, the image can be shown but nothing can be drawn on top of it,
+    because no measurement links map coordinates to pixels yet.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    building: str
+    floor: str
+    content_type: str
+    size_bytes: int
+    uploaded_at: str
+    origin_x_m: float | None = None
+    origin_y_m: float | None = None
+    metres_per_pixel: float | None = None
+    is_calibrated: bool = Field(
+        description="Whether node coordinates can be placed on this image."
+    )
+    note: str = ""
+    url: str = Field(description="Where to fetch the image itself.")
+
+    @classmethod
+    def from_floorplan(cls, plan: Floorplan) -> "FloorplanSummary":
+        return cls(
+            id=plan.id,
+            building=plan.building,
+            floor=plan.floor,
+            content_type=plan.content_type,
+            size_bytes=plan.size_bytes,
+            uploaded_at=plan.uploaded_at,
+            origin_x_m=plan.origin_x_m,
+            origin_y_m=plan.origin_y_m,
+            metres_per_pixel=plan.metres_per_pixel,
+            is_calibrated=plan.is_calibrated,
+            note=plan.note,
+            url=f"/floorplans/{plan.id}/file",
+        )
+
+
+class FloorplanCalibration(BaseModel):
+    """Where the map's coordinates sit on a floorplan image.
+
+    Anything left out keeps its current value, so a scale can be set now and
+    an origin corrected later.
+    """
+
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    origin_x_m: float | None = Field(
+        default=None, description="Map x at the image's top-left corner."
+    )
+    origin_y_m: float | None = Field(
+        default=None, description="Map y at the image's top-left corner."
+    )
+    metres_per_pixel: float | None = Field(
+        default=None, gt=0, description="How much ground one pixel covers."
+    )
+    note: str | None = Field(default=None, max_length=500)
+
+
+# --------------------------------------------------------------------------
+# Other ways round
+# --------------------------------------------------------------------------
+
+
+class RouteOption(BaseModel):
+    """One route offered to a user, with a reason it is worth looking at."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    label: str = Field(description="Short name, e.g. 'Fastest' or 'Less walking'.")
+    why: str = Field(
+        description="What this option trades, e.g. '80 m less walking, 1 min slower'."
+    )
+    route: RouteResponse
+
+
+class RouteChoices(BaseModel):
+    """The route asked for, plus other ways round worth considering.
+
+    Alternatives are only ever included when they genuinely beat the chosen
+    route on the measure it was not optimising for. A route that is worse at
+    everything is not an alternative, it is just a worse route.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    primary: RouteOption
+    alternatives: list[RouteOption] = Field(default_factory=list)
