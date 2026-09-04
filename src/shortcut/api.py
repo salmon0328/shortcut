@@ -24,11 +24,33 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi import (
+    Depends,
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    UploadFile,
+    status,
+)
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
 from shortcut.graph_store import CampusGraph, Edge, UnknownNodeError, load_graph
-from shortcut.overrides import apply_overrides, load_overrides, set_override
+from shortcut.overrides import (
+    OverridesError,
+    add_edge,
+    add_node,
+    apply_overrides,
+    load_overrides,
+    patch_edge,
+    patch_node,
+    remove_addition,
+    save_overrides,
+    set_override,
+)
+from shortcut.photo_store import PhotoStore, PhotoStoreError
 from shortcut.report_store import (
     ROUTE_BLOCKING_CONDITIONS,
     ReportStatus,
@@ -36,7 +58,13 @@ from shortcut.report_store import (
 )
 from shortcut.schemas import (
     EdgeSummary,
+    EdgeUpdateRequest,
+    GraphChangeResult,
+    NewEdgeRequest,
+    NewNodeRequest,
     NodeSummary,
+    NodeUpdateRequest,
+    PhotoSummary,
     ReportGroupSummary,
     ReportRequest,
     ReportSummary,
@@ -71,6 +99,7 @@ CAMPUS_GRAPH_PATH = PROJECT_ROOT / "data" / "campus_graph.json"
 # on demand and are not committed: they are this machine's reports, not map data.
 REPORTS_PATH = PROJECT_ROOT / "data" / "reports.json"
 GRAPH_OVERRIDES_PATH = PROJECT_ROOT / "data" / "graph_overrides.json"
+PHOTOS_DIR = PROJECT_ROOT / "data" / "photos"
 
 
 # --------------------------------------------------------------------------
@@ -108,6 +137,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     fail loudly rather than answer every request with an error.
     """
     app.state.reports = ReportStore(REPORTS_PATH)
+    app.state.photos = PhotoStore(PHOTOS_DIR)
     app.state.overrides_path = GRAPH_OVERRIDES_PATH
     app.state.graph = _load_graph_with_overrides(GRAPH_OVERRIDES_PATH)
     yield
@@ -133,7 +163,10 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=DEV_ALLOWED_ORIGINS,
-    allow_methods=["GET", "POST"],
+    # PATCH and DELETE are here for the admin screen, which edits and removes
+    # map entries. Photo uploads are multipart, so that content type is
+    # allowed alongside JSON.
+    allow_methods=["GET", "POST", "PATCH", "DELETE"],
     allow_headers=["Content-Type"],
     # No cookies or auth headers are used, so credentialed requests stay off.
     allow_credentials=False,
@@ -170,6 +203,28 @@ def get_reports(request: Request) -> ReportStore:
             detail="The report store is not ready yet. Try again shortly.",
         )
     return store
+
+
+def get_photos(request: Request) -> PhotoStore:
+    """Hand the photo store to an endpoint."""
+    store: PhotoStore | None = getattr(request.app.state, "photos", None)
+    if store is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="The photo store is not ready yet. Try again shortly.",
+        )
+    return store
+
+
+def _reload_graph(request: Request) -> CampusGraph:
+    """Rebuild the running map from the survey file plus every override.
+
+    Called after any change so the server matches what is on disk, rather than
+    drifting from it.
+    """
+    graph = _load_graph_with_overrides(request.app.state.overrides_path)
+    request.app.state.graph = graph
+    return graph
 
 
 # --------------------------------------------------------------------------
@@ -284,6 +339,7 @@ def get_edges(graph: CampusGraph = Depends(get_graph)) -> list[EdgeSummary]:
 def post_route(
     route_request: RouteRequest,
     graph: CampusGraph = Depends(get_graph),
+    photos: PhotoStore = Depends(get_photos),
 ) -> RouteResponse:
     """Return the quickest route from ``origin`` to ``destination``.
 
@@ -328,7 +384,11 @@ def post_route(
             ),
         ) from error
 
-    return RouteResponse.from_route(route, graph)
+    def find_photo(target_kind: str, target_id: str, facing: str | None) -> str | None:
+        photo = photos.find_best(target_kind, target_id, facing)
+        return f"/photos/{photo.id}/file" if photo else None
+
+    return RouteResponse.from_route(route, graph, find_photo)
 
 
 # --------------------------------------------------------------------------
@@ -518,3 +578,363 @@ def reject_report_group(
 ) -> ReviewResult:
     """Mark every pending report in the group rejected. The map is untouched."""
     return _review_group(request, key, "rejected", reports)
+
+
+# --------------------------------------------------------------------------
+# Photos
+# --------------------------------------------------------------------------
+
+
+def _photo_anchor(graph: CampusGraph, target_kind: str, target_id: str):
+    """The node whose building and floor describe where a photo was taken."""
+    if target_kind == "node":
+        return graph.nodes[target_id]
+    return graph.nodes[graph.edges_by_id[target_id].from_id]
+
+
+@app.get(
+    "/photos",
+    response_model=list[PhotoSummary],
+    summary="List photos, optionally only those of one place or link",
+)
+def get_photos_list(
+    target_kind: str | None = None,
+    target_id: str | None = None,
+    photos: PhotoStore = Depends(get_photos),
+) -> list[PhotoSummary]:
+    if target_kind and target_id:
+        found = photos.for_target(target_kind, target_id)
+    else:
+        found = photos.all()
+    return [PhotoSummary.from_photo(photo) for photo in found]
+
+
+@app.get(
+    "/photos/{photo_id}/file",
+    summary="Fetch the image itself",
+    response_class=FileResponse,
+)
+def get_photo_file(
+    photo_id: str, photos: PhotoStore = Depends(get_photos)
+) -> FileResponse:
+    photo = photos.get(photo_id)
+    if photo is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"No photo {photo_id!r}."
+        )
+    try:
+        path = photos.open_file(photo)
+    except PhotoStoreError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(error)
+        ) from error
+    return FileResponse(path, media_type=photo.content_type)
+
+
+@app.post(
+    "/photos",
+    response_model=PhotoSummary,
+    status_code=status.HTTP_201_CREATED,
+    summary="Upload a photo of a place or a link",
+)
+async def post_photo(
+    file: UploadFile = File(description="The image file."),
+    target_kind: str = Form(description="Either 'node' or 'edge'."),
+    target_id: str = Form(description="Which place or link this is a photo of."),
+    location: str = Form(default="", description="Where exactly it was taken."),
+    facing: str | None = Form(
+        default=None,
+        description=(
+            "Node id being looked towards. Set this so the photo can be shown "
+            "for the right direction of travel."
+        ),
+    ),
+    caption: str = Form(default=""),
+    building: str | None = Form(
+        default=None, description="Defaults to the target's own building."
+    ),
+    floor: str | None = Form(
+        default=None, description="Defaults to the target's own floor."
+    ),
+    graph: CampusGraph = Depends(get_graph),
+    photos: PhotoStore = Depends(get_photos),
+) -> PhotoSummary:
+    """Store one photo against something on the map.
+
+    The building and floor are recorded on the photo itself. They default to
+    the target's own, so nobody retypes what the map already knows, but they
+    are stored rather than derived: a photo should still say where it was
+    taken even if the map changes around it.
+    """
+    if target_kind not in ("node", "edge"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="target_kind must be 'node' or 'edge'.",
+        )
+    _require_known_target(graph, target_kind, target_id)
+
+    if facing is not None and facing not in graph.nodes:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Unknown node id {facing!r} for 'facing'.",
+        )
+
+    anchor = _photo_anchor(graph, target_kind, target_id)
+
+    try:
+        photo = photos.add(
+            content=await file.read(),
+            content_type=file.content_type or "",
+            target_kind=target_kind,
+            target_id=target_id,
+            building=building or anchor.building,
+            floor=floor or anchor.floor,
+            location=location,
+            facing=facing,
+            caption=caption,
+        )
+    except PhotoStoreError as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)
+        ) from error
+
+    return PhotoSummary.from_photo(photo)
+
+
+@app.delete(
+    "/photos/{photo_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a photo",
+)
+def delete_photo(photo_id: str, photos: PhotoStore = Depends(get_photos)) -> None:
+    if not photos.delete(photo_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"No photo {photo_id!r}."
+        )
+
+
+# --------------------------------------------------------------------------
+# Editing the map
+# --------------------------------------------------------------------------
+#
+# The same warning as the review endpoints applies here, and more strongly:
+# these are NOT protected. Approving a report can only flip a flag on
+# something that already exists; these change the map itself. Every one of
+# them writes to the overrides file and never to data/campus_graph.json, so
+# the surveyed data underneath is always recoverable by deleting that file.
+
+
+def _apply_change(request: Request, write) -> CampusGraph:
+    """Make a change, but keep it only if the map still builds afterwards.
+
+    A bad edit is undone rather than left in the overrides file, where it
+    would break the next startup instead of the request that caused it.
+    """
+    overrides_path = request.app.state.overrides_path
+    before = load_overrides(overrides_path)
+
+    write(overrides_path)
+    try:
+        return _reload_graph(request)
+    except OverridesError as error:
+        save_overrides(overrides_path, before)
+        _reload_graph(request)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)
+        ) from error
+
+
+@app.post(
+    "/admin/nodes",
+    response_model=GraphChangeResult,
+    status_code=status.HTTP_201_CREATED,
+    summary="Add a new place to the map",
+)
+def post_admin_node(
+    new_node: NewNodeRequest,
+    request: Request,
+    graph: CampusGraph = Depends(get_graph),
+) -> GraphChangeResult:
+    """Add a place, and optionally a link joining it to somewhere already there.
+
+    A place with nothing leading to it can never be routed to, which is why
+    the link is offered here rather than only as a separate step.
+    """
+    if new_node.id in graph.nodes:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"A place with id {new_node.id!r} already exists.",
+        )
+
+    edge_ids = [edge.edge_id() for edge in new_node.connections]
+    for edge_id in edge_ids:
+        if edge_id in graph.edges_by_id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"A link with id {edge_id!r} already exists.",
+            )
+
+    def write(path):
+        add_node(path, new_node.id, new_node.to_fields())
+        for edge in new_node.connections:
+            add_edge(path, edge.edge_id(), edge.to_fields())
+
+    # All of it or none of it: a half-added place with some of its links
+    # missing would be worse than a refusal.
+    updated = _apply_change(request, write)
+    return GraphChangeResult(
+        target_kind="node",
+        target_id=new_node.id,
+        created=True,
+        edge_ids=edge_ids,
+        node_count=len(updated.nodes),
+        edge_count=len(updated.edges),
+    )
+
+
+@app.post(
+    "/admin/edges",
+    response_model=GraphChangeResult,
+    status_code=status.HTTP_201_CREATED,
+    summary="Add a new link between two existing places",
+)
+def post_admin_edge(
+    new_edge: NewEdgeRequest,
+    request: Request,
+    graph: CampusGraph = Depends(get_graph),
+) -> GraphChangeResult:
+    edge_id = new_edge.edge_id()
+    if edge_id in graph.edges_by_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"A link with id {edge_id!r} already exists.",
+        )
+
+    for endpoint in (new_edge.from_id, new_edge.to_id):
+        if endpoint not in graph.nodes:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No place with id {endpoint!r}.",
+            )
+
+    updated = _apply_change(
+        request, lambda path: add_edge(path, edge_id, new_edge.to_fields())
+    )
+    return GraphChangeResult(
+        target_kind="edge",
+        target_id=edge_id,
+        created=True,
+        edge_ids=[edge_id],
+        node_count=len(updated.nodes),
+        edge_count=len(updated.edges),
+    )
+
+
+@app.patch(
+    "/admin/nodes/{node_id}",
+    response_model=GraphChangeResult,
+    summary="Change an existing place",
+)
+def patch_admin_node(
+    node_id: str,
+    changes: NodeUpdateRequest,
+    request: Request,
+    graph: CampusGraph = Depends(get_graph),
+) -> GraphChangeResult:
+    if node_id not in graph.nodes:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"No place {node_id!r}."
+        )
+
+    fields = changes.changed_fields()
+    if not fields:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="No changes were given.",
+        )
+
+    updated = _apply_change(request, lambda path: patch_node(path, node_id, fields))
+    return GraphChangeResult(
+        target_kind="node",
+        target_id=node_id,
+        created=False,
+        node_count=len(updated.nodes),
+        edge_count=len(updated.edges),
+    )
+
+
+@app.patch(
+    "/admin/edges/{edge_id}",
+    response_model=GraphChangeResult,
+    summary="Change an existing link",
+)
+def patch_admin_edge(
+    edge_id: str,
+    changes: EdgeUpdateRequest,
+    request: Request,
+    graph: CampusGraph = Depends(get_graph),
+) -> GraphChangeResult:
+    if edge_id not in graph.edges_by_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"No link {edge_id!r}."
+        )
+
+    fields = changes.changed_fields()
+    if not fields:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="No changes were given.",
+        )
+
+    updated = _apply_change(request, lambda path: patch_edge(path, edge_id, fields))
+    return GraphChangeResult(
+        target_kind="edge",
+        target_id=edge_id,
+        created=False,
+        node_count=len(updated.nodes),
+        edge_count=len(updated.edges),
+    )
+
+
+@app.delete(
+    "/admin/additions/{target_kind}/{target_id}",
+    response_model=GraphChangeResult,
+    summary="Remove something an administrator added",
+)
+def delete_admin_addition(
+    target_kind: str,
+    target_id: str,
+    request: Request,
+    photos: PhotoStore = Depends(get_photos),
+) -> GraphChangeResult:
+    """Delete an added place or link, along with its photos.
+
+    Only additions can be removed. Surveyed places and links stay: closing one
+    is what ``blocked`` is for, and deleting it here would put the map out of
+    step with the building somebody actually measured.
+    """
+    if target_kind not in ("node", "edge"):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Kind must be 'node' or 'edge'.",
+        )
+
+    overrides_path = request.app.state.overrides_path
+    if not remove_addition(overrides_path, target_kind, target_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                f"{target_id!r} was not added through the app, so it cannot be "
+                f"removed here. Surveyed places and links can only be blocked."
+            ),
+        )
+
+    photos.delete_for_target(target_kind, target_id)
+    updated = _reload_graph(request)
+    return GraphChangeResult(
+        target_kind=target_kind,
+        target_id=target_id,
+        created=False,
+        node_count=len(updated.nodes),
+        edge_count=len(updated.edges),
+    )

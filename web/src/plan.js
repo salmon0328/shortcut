@@ -1,7 +1,7 @@
 // The route planner: pick two places, ask the backend, then walk the answer
 // one step at a time.
 
-import { requestRoute } from "./api.js";
+import { photoUrl, requestRoute } from "./api.js";
 import { nodeName } from "./data.js";
 import { createSearchBox } from "./searchBox.js";
 
@@ -110,6 +110,17 @@ function renderSteps() {
     // Only the step being walked shows its full description, so the list
     // stays scannable.
     if (index === currentStepIndex) {
+      // A photo looking the way this step goes, if one has been taken. The
+      // backend only ever sends one facing the right direction.
+      if (step.photo_url) {
+        const photo = document.createElement("img");
+        photo.className = "step-photo";
+        photo.src = photoUrl(step.photo_url);
+        photo.alt = `Looking towards ${nodeName(step.to_id)}`;
+        photo.loading = "lazy";
+        item.appendChild(photo);
+      }
+
       const detail = document.createElement("p");
       detail.className = "step-detail";
       detail.textContent = step.detail;

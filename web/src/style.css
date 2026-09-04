@@ -564,3 +564,190 @@ button.approve:hover:not(:disabled) {
   color: var(--no);
   text-transform: capitalize;
 }
+
+/* --- admin tabs --- */
+
+.tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.tab {
+  width: auto;
+  flex: 1;
+  padding: 0.5rem;
+  color: var(--muted);
+  background: var(--page);
+  border: 1px solid var(--line);
+  font-size: 0.9rem;
+}
+
+.tab.is-active {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.tab:hover:not(.is-active) {
+  background: #e8ecf1;
+}
+
+/* --- map editor --- */
+
+#admin-tab-map .card {
+  margin-bottom: 0.75rem;
+}
+
+.field-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.field-row .field {
+  flex: 1;
+}
+
+input[type="text"],
+input[type="number"],
+input[type="file"] {
+  width: 100%;
+  padding: 0.5rem;
+  font: inherit;
+  color: inherit;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 0.375rem;
+}
+
+code {
+  padding: 0.1rem 0.3rem;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 0.85em;
+  background: var(--page);
+  border-radius: 0.2rem;
+}
+
+#inspect-panel h3 {
+  margin: 1.5rem 0 0.5rem;
+  font-size: 1rem;
+}
+
+#inspect-save {
+  margin-top: 0.5rem;
+}
+
+#inspect-delete {
+  margin-top: 0.5rem;
+}
+
+/* --- photos --- */
+
+.photo-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: 0.5rem;
+}
+
+.photo-card {
+  margin: 0;
+  padding: 0.5rem;
+  background: var(--page);
+  border: 1px solid var(--line);
+  border-radius: 0.375rem;
+}
+
+.photo-card img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  background: var(--line);
+  border-radius: 0.25rem;
+}
+
+.photo-card figcaption {
+  margin: 0.375rem 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.photo-upload {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+
+/* A photo of the way this step goes, shown above its description. */
+.step-photo {
+  display: block;
+  width: 100%;
+  max-height: 12rem;
+  object-fit: cover;
+  margin: 0.5rem 0;
+  background: var(--line);
+  border-radius: 0.375rem;
+}
+
+/* --- multiple connections when adding a place --- */
+
+.tabs {
+  flex-wrap: wrap;
+}
+
+.connection-row {
+  margin-bottom: 0.75rem;
+  padding: 0.75rem;
+  background: var(--page);
+  border: 1px solid var(--line);
+  border-radius: 0.375rem;
+}
+
+.connection-row .field-row {
+  margin-bottom: 0.5rem;
+}
+
+.connection-row .field-row .field {
+  min-width: 0;
+}
+
+.connection-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.connection-flags .choice {
+  margin-bottom: 0;
+}
+
+/* --- photos waiting to be uploaded --- */
+
+.photo-queue {
+  margin-top: 0.5rem;
+}
+
+.photo-queue-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.375rem;
+  margin-bottom: 0.5rem;
+  padding: 0.5rem;
+  background: var(--page);
+  border: 1px solid var(--line);
+  border-radius: 0.375rem;
+}
+
+.photo-queue-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.photo-queue-row button {
+  width: auto;
+  justify-self: start;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.8rem;
+}

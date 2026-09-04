@@ -207,7 +207,19 @@ def test_each_edge_has_the_expected_shape(client: TestClient) -> None:
     body = client.get("/edges").json()
 
     for edge in body:
-        assert set(edge) == {"id", "from_id", "to_id", "label", "blocked", "condition"}
+        assert set(edge) == {
+            "id",
+            "from_id",
+            "to_id",
+            "label",
+            "distance_m",
+            "walk_seconds",
+            "covered",
+            "stairs",
+            "lift",
+            "blocked",
+            "condition",
+        }
 
 
 def test_an_edge_is_labelled_with_both_ends(client: TestClient) -> None:
@@ -687,7 +699,8 @@ def test_wildcard_origin_is_never_returned(client: TestClient) -> None:
         assert response.headers.get("access-control-allow-origin") != "*"
 
 
-def test_methods_beyond_get_and_post_are_not_offered(client: TestClient) -> None:
+def test_only_the_methods_the_app_uses_are_offered(client: TestClient) -> None:
+    """PATCH and DELETE are for the admin screen; PUT is used nowhere."""
     allowed = client.options(
         "/route",
         headers={
@@ -696,8 +709,9 @@ def test_methods_beyond_get_and_post_are_not_offered(client: TestClient) -> None
         },
     ).headers["access-control-allow-methods"]
 
-    assert "DELETE" not in allowed
-    assert "PUT" not in allowed
+    offered = {method.strip() for method in allowed.split(",")}
+    assert offered == {"GET", "POST", "PATCH", "DELETE"}
+    assert "PUT" not in offered
 
 
 def test_requests_without_an_origin_are_untouched(client: TestClient) -> None:

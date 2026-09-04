@@ -26,6 +26,8 @@ __all__ = [
     "CampusGraph",
     "build_graph",
     "load_graph",
+    "parse_node",
+    "parse_edge",
     "get_node",
     "get_edges_from",
     "get_neighbours",
@@ -271,8 +273,37 @@ def _optional_bool(raw: dict[str, Any], key: str, where: str, default: bool = Fa
     return value
 
 
+def parse_node(raw: Any, where: str = "node") -> Node:
+    """Validate one node's fields and build it.
+
+    Public because nodes now arrive one at a time from the admin screen, not
+    only in bulk from the graph file. ``where`` appears in error messages, so
+    pass something the caller will recognise.
+
+    Raises:
+        GraphSchemaError: a field is missing or the wrong type.
+    """
+    return _parse_node_at(raw, where)
+
+
+def parse_edge(raw: Any, where: str = "edge") -> Edge:
+    """Validate one edge's fields and build it.
+
+    Note this does *not* check that the endpoints exist: only the graph knows
+    that, so it is checked when the edge is put into one.
+
+    Raises:
+        GraphSchemaError: a field is missing, wrongly typed, or the edge
+            starts and ends at the same node.
+    """
+    return _parse_edge_at(raw, where)
+
+
 def _parse_node(raw: Any, index: int) -> Node:
-    where = f"nodes[{index}]"
+    return _parse_node_at(raw, f"nodes[{index}]")
+
+
+def _parse_node_at(raw: Any, where: str) -> Node:
     if not isinstance(raw, dict):
         raise GraphSchemaError(f"{where}: each node must be a JSON object, got {type(raw).__name__}.")
 
@@ -292,7 +323,10 @@ def _parse_node(raw: Any, index: int) -> Node:
 
 
 def _parse_edge(raw: Any, index: int) -> Edge:
-    where = f"edges[{index}]"
+    return _parse_edge_at(raw, f"edges[{index}]")
+
+
+def _parse_edge_at(raw: Any, where: str) -> Edge:
     if not isinstance(raw, dict):
         raise GraphSchemaError(f"{where}: each edge must be a JSON object, got {type(raw).__name__}.")
 

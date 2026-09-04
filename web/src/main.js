@@ -7,6 +7,7 @@
 import "./style.css";
 
 import { refreshQueue } from "./admin.js";
+import { refreshMapEditor } from "./adminMap.js";
 import { loadReferenceData } from "./data.js";
 import { currentStep, showPlanError, showPlanLoading, stopPlanLoading } from "./plan.js";
 import { prefillFromStep, resetForm } from "./report.js";
@@ -56,11 +57,42 @@ reportProblemButton.addEventListener("click", () => {
 adminToggle.addEventListener("change", () => {
   if (adminToggle.checked) {
     showView("admin");
-    refreshQueue();
+    showAdminTab("reports");
   } else {
     showView("plan");
   }
 });
+
+// --------------------------------------------------------------------------
+// The two halves of admin mode
+// --------------------------------------------------------------------------
+
+const adminTabs = {
+  reports: document.querySelector("#admin-tab-reports"),
+  "add-place": document.querySelector("#admin-tab-add-place"),
+  "add-link": document.querySelector("#admin-tab-add-link"),
+  edit: document.querySelector("#admin-tab-edit"),
+};
+
+function showAdminTab(name) {
+  for (const [key, element] of Object.entries(adminTabs)) {
+    element.hidden = key !== name;
+  }
+  for (const button of document.querySelectorAll(".tab")) {
+    button.classList.toggle("is-active", button.dataset.tab === name);
+  }
+
+  // Every panel reads the map, which another one may have just changed.
+  if (name === "reports") {
+    refreshQueue();
+  } else {
+    refreshMapEditor();
+  }
+}
+
+for (const button of document.querySelectorAll(".tab")) {
+  button.addEventListener("click", () => showAdminTab(button.dataset.tab));
+}
 
 // --------------------------------------------------------------------------
 // Start

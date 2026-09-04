@@ -23,3 +23,4 @@ Thumbs.db
 # stays the committed source of truth.
 data/reports.json
 data/graph_overrides.json
+data/photos/
