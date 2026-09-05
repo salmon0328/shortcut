@@ -250,11 +250,22 @@ def test_fetching_a_plan_that_does_not_exist_is_a_404(client: TestClient) -> Non
 # --------------------------------------------------------------------------
 
 
-def test_places_start_without_coordinates(client: TestClient) -> None:
-    """Nothing has been surveyed onto a plan yet, and the API says so."""
+def test_a_place_is_either_on_a_plan_or_off_it_never_half_on(
+    client: TestClient,
+) -> None:
+    """A place has both coordinates or neither.
+
+    Half a position is worse than none: the map would draw the pin against a
+    default for the missing axis and put the place confidently in the wrong
+    part of the building. Floors nobody has traced yet legitimately have no
+    coordinates at all, which is why this asks for agreement rather than for
+    every place to have them.
+    """
     nodes = client.get("/nodes").json()
 
-    assert all(node["x"] is None and node["y"] is None for node in nodes)
+    assert nodes
+    assert all((node["x"] is None) == (node["y"] is None) for node in nodes)
+    assert any(node["x"] is not None for node in nodes)
 
 
 def test_a_place_can_be_given_coordinates(client: TestClient) -> None:

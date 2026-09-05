@@ -180,16 +180,16 @@ def test_a_known_node_carries_its_real_name_and_building(
     body = client.get("/nodes").json()
 
     by_id = {node["id"]: node for node in body}
-    assert by_id[ORIGIN] == {
-        "id": "Hive_B5_C",
-        "name": "Staircase 1",
-        "building": "Hive",
-        "floor": "B5",
-        "condition": None,
-        # Nothing has been surveyed onto a floorplan yet.
-        "x": None,
-        "y": None,
-    }
+    origin = by_id[ORIGIN]
+    assert origin["id"] == "Hive_B5_C"
+    assert origin["name"] == "Staircase 1"
+    assert origin["building"] == "Hive"
+    assert origin["floor"] == "B5"
+    assert origin["condition"] is None
+    # Traced onto the B5 floorplan, so it has somewhere to be drawn. The
+    # numbers themselves are not asserted: they move whenever the plan is
+    # retraced, and a test that pins them would fail for an improvement.
+    assert isinstance(origin["x"], float) and isinstance(origin["y"], float)
     assert by_id[DESTINATION]["name"] == "Main Entrance"
     assert by_id[DESTINATION]["floor"] == "B5"
 
