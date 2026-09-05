@@ -18,19 +18,22 @@ The calibration is deliberately the simplest thing that works:
 which is enough for ``pixel = (x - origin) / metres_per_pixel``. Rotated or
 skewed plans would need more, and can have it when a real plan turns up.
 
-Files are local for now; on AWS they become S3 objects and only the file
-helpers change.
+Both the image files and the JSON index describing them go through a
+:class:`~shortcut.blob_store.BlobStore`, which is a local folder unless
+``SHORTCUT_S3_BUCKET`` is set, in which case both live in S3 - so a plan one
+teammate uploads shows up for everyone, not just on their machine.
 """
 
 from __future__ import annotations
 
 import json
-import os
 import uuid
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from shortcut.blob_store import BlobStore, build_blob_store
 
 __all__ = [
     "ALLOWED_CONTENT_TYPES",
@@ -105,9 +108,11 @@ class Floorplan:
 class FloorplanStore:
     """Reads and writes floorplan images and the index describing them."""
 
+    INDEX_KEY = "floorplans.json"
+
     def __init__(self, directory: str | Path) -> None:
         self.directory = Path(directory)
-        self.index_path = self.directory / "floorplans.json"
+        self._blobs: BlobStore = build_blob_store(self.directory, prefix="floorplans")
 
     # -- reading -----------------------------------------------------------
 
@@ -137,13 +142,13 @@ class FloorplanStore:
             return None
         return max(matches, key=lambda pair: (pair[1].uploaded_at, pair[0]))[1]
 
-    def open_file(self, plan: Floorplan) -> Path:
-        path = self.directory / plan.filename
-        if not path.exists():
+    def read_file(self, plan: Floorplan) -> bytes:
+        content = self._blobs.read(plan.filename)
+        if content is None:
             raise FloorplanStoreError(
                 f"Floorplan {plan.id} is in the index but its file is missing."
             )
-        return path
+        return content
 
     # -- writing -----------------------------------------------------------
 
@@ -240,45 +245,36 @@ class FloorplanStore:
 
         gone = next(plan for plan in plans if plan.id == floorplan_id)
         self._write(remaining)
-        (self.directory / gone.filename).unlink(missing_ok=True)
+        self._blobs.delete(gone.filename)
         return True
 
-    # -- disk --------------------------------------------------------------
+    # -- storage -------------------------------------------------------------
 
     def _save_file(self, filename: str, content: bytes) -> None:
-        self.directory.mkdir(parents=True, exist_ok=True)
-        temporary = self.directory / f"{filename}.tmp"
-        temporary.write_bytes(content)
-        os.replace(temporary, self.directory / filename)
+        self._blobs.write(filename, content)
 
     def _read(self) -> list[Floorplan]:
-        if not self.index_path.exists():
+        raw_bytes = self._blobs.read(self.INDEX_KEY)
+        if raw_bytes is None:
             return []
 
         try:
-            raw = json.loads(self.index_path.read_text(encoding="utf-8"))
+            raw = json.loads(raw_bytes.decode("utf-8"))
         except json.JSONDecodeError as error:
             raise FloorplanStoreError(
-                f"{self.index_path} is not valid JSON: {error.msg} "
+                f"{self.INDEX_KEY} is not valid JSON: {error.msg} "
                 f"(line {error.lineno}, column {error.colno})."
-            ) from error
-        except OSError as error:
-            raise FloorplanStoreError(
-                f"Could not read {self.index_path}: {error}"
             ) from error
 
         if not isinstance(raw, list):
             raise FloorplanStoreError(
-                f"{self.index_path}: expected a list, got {type(raw).__name__}."
+                f"{self.INDEX_KEY}: expected a list, got {type(raw).__name__}."
             )
         return [self._parse(entry, index) for index, entry in enumerate(raw)]
 
     def _write(self, plans: list[Floorplan]) -> None:
-        self.directory.mkdir(parents=True, exist_ok=True)
         text = json.dumps([asdict(plan) for plan in plans], indent=2) + "\n"
-        temporary = self.index_path.with_suffix(".json.tmp")
-        temporary.write_text(text, encoding="utf-8")
-        os.replace(temporary, self.index_path)
+        self._blobs.write(self.INDEX_KEY, text.encode("utf-8"))
 
     @staticmethod
     def _parse(entry: Any, index: int) -> Floorplan:

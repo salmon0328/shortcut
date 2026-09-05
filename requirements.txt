@@ -3,3 +3,4 @@ fastapi
 uvicorn
 httpx
 python-multipart
+boto3

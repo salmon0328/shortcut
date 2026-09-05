@@ -5,9 +5,10 @@ at the lift lobby, looking towards the courtyard". That pairing is what lets
 the turn-by-turn screen show the right picture for the direction someone is
 actually walking, rather than a picture of the same corridor from the far end.
 
-Files are written to a folder and described in a JSON index beside it. Both
-are local for now; when this moves to AWS the files become S3 objects and only
-:meth:`PhotoStore._save_file` and :meth:`PhotoStore.open_file` need to change.
+Both the image files and the JSON index describing them go through a
+:class:`~shortcut.blob_store.BlobStore`, which is a local folder unless
+``SHORTCUT_S3_BUCKET`` is set, in which case both live in S3 - so a photo one
+teammate uploads shows up for everyone, not just on their machine.
 
 Nothing here inspects image content. Deciding whether a photo actually shows
 what it claims is an AI job for later; today a photo is trusted as uploaded.
@@ -16,12 +17,13 @@ what it claims is an AI job for later; today a photo is trusted as uploaded.
 from __future__ import annotations
 
 import json
-import os
 import uuid
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
+
+from shortcut.blob_store import BlobStore, build_blob_store
 
 __all__ = [
     "ALLOWED_CONTENT_TYPES",
@@ -81,9 +83,11 @@ class Photo:
 class PhotoStore:
     """Reads and writes photo files and the index describing them."""
 
+    INDEX_KEY = "photos.json"
+
     def __init__(self, directory: str | Path) -> None:
         self.directory = Path(directory)
-        self.index_path = self.directory / "photos.json"
+        self._blobs: BlobStore = build_blob_store(self.directory, prefix="photos")
 
     # -- reading -----------------------------------------------------------
 
@@ -130,14 +134,14 @@ class PhotoStore:
         ]
         return undirected[0] if undirected else None
 
-    def open_file(self, photo: Photo) -> Path:
-        """The path of a photo's file on disk."""
-        path = self.directory / photo.filename
-        if not path.exists():
+    def read_file(self, photo: Photo) -> bytes:
+        """The bytes of a photo's file."""
+        content = self._blobs.read(photo.filename)
+        if content is None:
             raise PhotoStoreError(
                 f"Photo {photo.id} is in the index but its file is missing."
             )
-        return path
+        return content
 
     # -- writing -----------------------------------------------------------
 
@@ -226,7 +230,7 @@ class PhotoStore:
         # Write the index first: an orphaned file wastes space, but an index
         # entry with no file behind it breaks every page that shows it.
         self._write(remaining)
-        (self.directory / gone.filename).unlink(missing_ok=True)
+        self._blobs.delete(gone.filename)
         return True
 
     def delete_for_target(self, target_kind: str, target_id: str) -> int:
@@ -238,40 +242,33 @@ class PhotoStore:
             self.delete(photo_id)
         return len(doomed)
 
-    # -- disk --------------------------------------------------------------
+    # -- storage -------------------------------------------------------------
 
     def _save_file(self, filename: str, content: bytes) -> None:
-        self.directory.mkdir(parents=True, exist_ok=True)
-        temporary = self.directory / f"{filename}.tmp"
-        temporary.write_bytes(content)
-        os.replace(temporary, self.directory / filename)
+        self._blobs.write(filename, content)
 
     def _read(self) -> list[Photo]:
-        if not self.index_path.exists():
+        raw_bytes = self._blobs.read(self.INDEX_KEY)
+        if raw_bytes is None:
             return []
 
         try:
-            raw = json.loads(self.index_path.read_text(encoding="utf-8"))
+            raw = json.loads(raw_bytes.decode("utf-8"))
         except json.JSONDecodeError as error:
             raise PhotoStoreError(
-                f"{self.index_path} is not valid JSON: {error.msg} "
+                f"{self.INDEX_KEY} is not valid JSON: {error.msg} "
                 f"(line {error.lineno}, column {error.colno})."
             ) from error
-        except OSError as error:
-            raise PhotoStoreError(f"Could not read {self.index_path}: {error}") from error
 
         if not isinstance(raw, list):
             raise PhotoStoreError(
-                f"{self.index_path}: expected a list, got {type(raw).__name__}."
+                f"{self.INDEX_KEY}: expected a list, got {type(raw).__name__}."
             )
         return [self._parse(entry, index) for index, entry in enumerate(raw)]
 
     def _write(self, photos: list[Photo]) -> None:
-        self.directory.mkdir(parents=True, exist_ok=True)
         text = json.dumps([asdict(photo) for photo in photos], indent=2) + "\n"
-        temporary = self.index_path.with_suffix(".json.tmp")
-        temporary.write_text(text, encoding="utf-8")
-        os.replace(temporary, self.index_path)
+        self._blobs.write(self.INDEX_KEY, text.encode("utf-8"))
 
     @staticmethod
     def _parse(entry: Any, index: int) -> Photo:

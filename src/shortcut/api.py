@@ -35,7 +35,7 @@ from fastapi import (
     status,
 )
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 
 from shortcut.crowding import crowd_waits, with_crowding
 from shortcut.graph_store import CampusGraph, Edge, UnknownNodeError, load_graph
@@ -676,23 +676,22 @@ def get_photos_list(
 @app.get(
     "/photos/{photo_id}/file",
     summary="Fetch the image itself",
-    response_class=FileResponse,
 )
 def get_photo_file(
     photo_id: str, photos: PhotoStore = Depends(get_photos)
-) -> FileResponse:
+) -> Response:
     photo = photos.get(photo_id)
     if photo is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=f"No photo {photo_id!r}."
         )
     try:
-        path = photos.open_file(photo)
+        content = photos.read_file(photo)
     except PhotoStoreError as error:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=str(error)
         ) from error
-    return FileResponse(path, media_type=photo.content_type)
+    return Response(content=content, media_type=photo.content_type)
 
 
 @app.post(
@@ -1032,11 +1031,10 @@ def get_floorplans(
 @app.get(
     "/floorplans/{floorplan_id}/file",
     summary="Fetch a floorplan image",
-    response_class=FileResponse,
 )
 def get_floorplan_file(
     floorplan_id: str, floorplans: FloorplanStore = Depends(get_floorplans_store)
-) -> FileResponse:
+) -> Response:
     plan = floorplans.get(floorplan_id)
     if plan is None:
         raise HTTPException(
@@ -1044,12 +1042,12 @@ def get_floorplan_file(
             detail=f"No floorplan {floorplan_id!r}.",
         )
     try:
-        path = floorplans.open_file(plan)
+        content = floorplans.read_file(plan)
     except FloorplanStoreError as error:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=str(error)
         ) from error
-    return FileResponse(path, media_type=plan.content_type)
+    return Response(content=content, media_type=plan.content_type)
 
 
 @app.post(

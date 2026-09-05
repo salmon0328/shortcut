@@ -147,6 +147,7 @@ function createPhotoQueue(fileInput, listElement) {
 // --------------------------------------------------------------------------
 
 const addForm = document.querySelector("#add-node-form");
+const addSubmit = document.querySelector("#add-node-submit");
 const newId = document.querySelector("#new-node-id");
 const newName = document.querySelector("#new-node-name");
 const newBuilding = document.querySelector("#new-node-building");
@@ -353,6 +354,7 @@ function readConnections(nodeId) {
 
 addForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (addSubmit.disabled) return;
 
   const nodeId = newId.value.trim();
 
@@ -370,6 +372,12 @@ addForm.addEventListener("submit", async (event) => {
     showStatus(error.message, "error");
     return;
   }
+
+  // Adding the place, then uploading its photos, both go over the network -
+  // without this, a click that seems to do nothing invites more clicks, and
+  // each one would try to add the same place again and re-upload the queue.
+  addSubmit.disabled = true;
+  addSubmit.textContent = "Adding…";
 
   try {
     const result = await addNode(payload);
@@ -397,6 +405,9 @@ addForm.addEventListener("submit", async (event) => {
     );
   } catch (error) {
     showStatus(error.message, "error");
+  } finally {
+    addSubmit.disabled = false;
+    addSubmit.textContent = "Add place";
   }
 });
 
@@ -501,6 +512,7 @@ const inspectDelete = document.querySelector("#inspect-delete");
 const photoList = document.querySelector("#photo-list");
 const photoForm = document.querySelector("#photo-form");
 const photoLocation = document.querySelector("#photo-location");
+const photoSubmit = document.querySelector("#photo-submit");
 
 const editPhotos = createPhotoQueue(
   document.querySelector("#photo-file"),
@@ -709,13 +721,26 @@ async function refreshPhotos() {
 
 photoForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  if (!target || editPhotos.entries().length === 0) return;
+  if (!target || editPhotos.entries().length === 0 || photoSubmit.disabled) return;
 
-  const { uploaded, failures } = await editPhotos.uploadAll(
-    target.kind,
-    target.id,
-    photoLocation.value.trim()
-  );
+  // Uploads go over the network and can take a moment, especially against
+  // S3. Without this, a click that seems to do nothing invites more clicks,
+  // and each one would start its own full upload of the same queue.
+  photoSubmit.disabled = true;
+  photoSubmit.textContent = "Uploading…";
+
+  let uploaded = 0;
+  let failures = [];
+  try {
+    ({ uploaded, failures } = await editPhotos.uploadAll(
+      target.kind,
+      target.id,
+      photoLocation.value.trim()
+    ));
+  } finally {
+    photoSubmit.disabled = false;
+    photoSubmit.textContent = "Upload photos";
+  }
 
   editPhotos.clear();
   refreshPhotos();

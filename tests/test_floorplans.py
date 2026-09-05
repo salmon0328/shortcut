@@ -66,7 +66,7 @@ def test_a_plan_can_be_uploaded_before_it_is_measured(
     )
 
     assert plan.is_calibrated is False
-    assert floorplans.open_file(plan).read_bytes() == PNG
+    assert floorplans.read_file(plan) == PNG
 
 
 def test_an_uncalibrated_plan_refuses_to_place_a_point(
@@ -172,10 +172,9 @@ def test_deleting_a_plan_removes_its_file(floorplans: FloorplanStore) -> None:
     plan = floorplans.add(
         content=PNG, content_type="image/png", building="Hive", floor="B5"
     )
-    path = floorplans.open_file(plan)
-
     assert floorplans.delete(plan.id) is True
-    assert not path.exists()
+    with pytest.raises(FloorplanStoreError):
+        floorplans.read_file(plan)
 
 
 # --------------------------------------------------------------------------
