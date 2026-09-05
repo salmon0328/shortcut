@@ -1,0 +1,15 @@
+# Agentic AI layer. Kept separate from requirements.txt on purpose: the core
+# service and all of its tests must stay installable and runnable on a machine
+# with none of this installed. src/shortcut/ai/ is imported behind a guard in
+# api.py, so a missing dependency degrades to "no /ai endpoints", not a crash.
+#
+#   python -m venv .venv
+#   .venv/bin/pip install -r requirements.txt -r requirements-ai.txt
+#
+# Versions are the ones this was verified against on Python 3.13, pinned
+# because a hackathon demo machine should resolve to exactly what we tested.
+
+boto3==1.43.88            # Bedrock client (botocore comes with it)
+langchain-core==1.6.1     # message shapes + structured output plumbing
+langchain-aws==1.7.5      # ChatBedrockConverse
+langgraph==1.2.11         # typed state, nodes, edges, bounded loops
