@@ -79,7 +79,7 @@ def test_a_photo_survives_a_round_trip(photos: PhotoStore) -> None:
     )
 
     assert photos.get(photo.id) == photo
-    assert photos.open_file(photo).read_bytes() == PNG
+    assert photos.read_file(photo) == PNG
 
 
 def test_an_empty_file_is_refused(photos: PhotoStore) -> None:
@@ -134,11 +134,10 @@ def test_deleting_a_photo_removes_its_file(photos: PhotoStore) -> None:
         floor="B5",
         location="",
     )
-    path = photos.open_file(photo)
-
     assert photos.delete(photo.id) is True
     assert photos.all() == []
-    assert not path.exists()
+    with pytest.raises(PhotoStoreError):
+        photos.read_file(photo)
 
 
 def test_the_right_photo_is_chosen_for_the_way_you_are_walking(
