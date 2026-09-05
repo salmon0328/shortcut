@@ -25,9 +25,9 @@ from fastapi.testclient import TestClient
 from shortcut.api import DEV_ALLOWED_ORIGINS, app, get_graph
 from shortcut.graph_store import CampusGraph, load_graph
 
-# The route under test, taken from the real graph. Only Hive's B5 floor is
-# surveyed right now - B4 was deliberately removed so testing could start
-# against a small, real, single-floor subset:
+# The route under test, taken from the real graph. Both surveyed floors are
+# in it now, but this route stays on B5: crossing to B4 and back costs over a
+# minute, so no cross-floor edge can undercut it.
 #   Hive_B5_A --(Hive_B5_002)-> Hive_B5_G --(Hive_B5_007)-> Hive_B5_C
 ORIGIN = "Hive_B5_A"
 DESTINATION = "Hive_B5_C"
@@ -433,12 +433,11 @@ def test_a_route_to_the_same_node_has_no_steps(client: TestClient) -> None:
 # Stairs and lifts, on a small synthetic graph
 # --------------------------------------------------------------------------
 #
-# Only Hive's B5 floor is surveyed right now, and B5 alone has no corridor
-# that climbs anything - those flags only ever lived on the corridors that
-# used to cross floors. So the stairs/lift *preferences* need something real
-# to choose between, which this graph exists to provide: two isolated test
-# places joined only by a staircase and a lift, mirroring what a real
-# multi-floor link will look like once more of the building is surveyed.
+# The real graph now has stairs and a lift between B5 and B4, and
+# tests/test_cross_floor.py exercises them. This synthetic pair stays anyway,
+# on purpose: it isolates the *preference logic* from the survey, so these
+# tests keep meaning the same thing when a corridor is re-measured or a new
+# floor arrives. Two places, one staircase, one lift, nothing else.
 
 STAIRS_OR_LIFT_ORIGIN = "Test_Upper"
 STAIRS_OR_LIFT_DESTINATION = "Test_Lower"
@@ -663,9 +662,15 @@ def test_refusing_both_still_works_on_a_single_floor(client: TestClient) -> None
     assert response.json()["uses_stairs"] is False
 
 
-def test_sheltered_only_succeeds_because_every_edge_is_covered(
+def test_sheltered_only_keeps_a_route_that_is_covered_end_to_end(
     client: TestClient,
 ) -> None:
+    """The hard filter passes when a fully covered way exists.
+
+    Every surveyed corridor in the Hive is covered, so this is currently true
+    of any route. It is still worth asserting: the day an outdoor link is
+    surveyed, this test is what notices that the filter started mattering.
+    """
     body = post_route_with(client, sheltered_only=True).json()
 
     assert body["fully_sheltered"] is True

@@ -62,7 +62,7 @@ __all__ = [
 
 # How a caller wants a route scored. Anything outside this set is rejected by
 # Pydantic with a 422 naming the allowed values.
-RoutePreference = Literal["fastest", "prefer_lift", "least_walking"]
+RoutePreference = Literal["fastest", "prefer_lift", "least_walking", "sheltered"]
 
 
 # --------------------------------------------------------------------------
@@ -640,8 +640,11 @@ class ReviewResult(BaseModel):
     )
     routing_changed: bool = Field(
         description=(
-            "True if the map used for routing changed as a result. Approving "
-            "a crowded report does not change routing, only warns."
+            "True if the map itself changed - that is, if something was "
+            "closed to routing. Approving a crowded report leaves the map "
+            "alone: crowding is priced at routing time and expires on its "
+            "own, so it can still change which way is quickest without "
+            "changing what is walkable."
         )
     )
 
