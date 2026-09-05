@@ -105,6 +105,15 @@ The plain-language layer runs offline by default. To use Claude on Bedrock:
 
 `GET /ai/health` reports which mode is live and why, without spending tokens.
 
+## Sharing photos and floorplans
+
+Uploads stay on the machine that made them, in `data/photos` and
+`data/floorplans`, unless a bucket is named. To share them with the team, set
+`SHORTCUT_S3_BUCKET` in `.env` (see `.env.example`) and have AWS credentials
+that can read and write it. The server reads `.env` once at startup, so
+restart it after changing the file. A setting in your shell always wins over
+the file, and the tests never touch a bucket whatever either says.
+
 ## Testing
 
 ```bash

@@ -21,6 +21,8 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from shortcut.dotenv import load_dotenv
+
 __all__ = [
     "AUTO_MERGE_THRESHOLD_ADVISORY",
     "AUTO_MERGE_THRESHOLD_BLOCKING",
@@ -71,23 +73,6 @@ AUTO_MERGE_THRESHOLD_BLOCKING = 2.0
 AUTO_MERGE_THRESHOLD_ADVISORY = 1.0
 
 
-def _load_dotenv(path: Path) -> None:
-    """Read ``.env`` into the environment, if it exists.
-
-    Hand-rolled rather than pulling in python-dotenv: it is eight lines, and
-    the core service deliberately has almost no dependencies. A real
-    environment variable always wins; this only fills in what is missing.
-    """
-    if not path.exists():
-        return
-    for line in path.read_text().splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        os.environ.setdefault(key.strip(), value.strip().strip("'\""))
-
-
 def _truthy(raw: str | None, *, default: bool) -> bool:
     if raw is None or raw == "":
         return default
@@ -117,7 +102,10 @@ def load_settings(project_root: Path | None = None) -> AiSettings:
     AWS credentials at all. Turning the real model on is an explicit act.
     """
     root = project_root or Path(__file__).resolve().parents[3]
-    _load_dotenv(root / ".env")
+    # The server has normally read this already at startup; doing it again is
+    # harmless (only unset names are filled) and keeps the AI settings correct
+    # when this package is used on its own, as in scripts/check_bedrock.py.
+    load_dotenv(root / ".env")
     return AiSettings(
         model_id=os.environ.get("MODEL_ID") or BEDROCK_MODEL_ID,
         region=os.environ.get("AWS_REGION") or DEFAULT_REGION,

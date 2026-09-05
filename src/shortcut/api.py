@@ -39,6 +39,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
 from shortcut.crowding import crowd_waits, with_crowding
+from shortcut.dotenv import load_dotenv
 from shortcut.graph_store import CampusGraph, Edge, UnknownNodeError, load_graph
 from shortcut.overrides import (
     LIVE_CONDITION_FIELDS,
@@ -100,6 +101,7 @@ __all__ = [
     "app",
     "get_graph",
     "CAMPUS_GRAPH_PATH",
+    "DOTENV_PATH",
     "DEV_ALLOWED_ORIGINS",
     "AI_ROUTES_ENABLED",
 ]
@@ -124,6 +126,11 @@ REPORTS_PATH = PROJECT_ROOT / "data" / "reports.json"
 GRAPH_OVERRIDES_PATH = PROJECT_ROOT / "data" / "graph_overrides.json"
 PHOTOS_DIR = PROJECT_ROOT / "data" / "photos"
 FLOORPLANS_DIR = PROJECT_ROOT / "data" / "floorplans"
+
+# Optional settings, read once at startup and only ever filling in what the
+# real environment leaves unset. A module-level path so tests can point it
+# somewhere empty and stay on local disk whatever a developer's own file says.
+DOTENV_PATH = PROJECT_ROOT / ".env"
 
 
 # --------------------------------------------------------------------------
@@ -159,7 +166,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     If the file is missing or invalid, ``load_graph`` raises and the server
     refuses to start. That is deliberate: a navigation API with no map should
     fail loudly rather than answer every request with an error.
+
+    ``.env`` is read first, before anything that might depend on it: the
+    photo and floorplan stores choose between local disk and S3 when they
+    are built, so a bucket named in the file has to be in the environment by
+    then.
     """
+    applied = load_dotenv(DOTENV_PATH)
+    if applied:
+        logger.info("Read %s from %s", ", ".join(applied), DOTENV_PATH)
+
     app.state.reports = ReportStore(REPORTS_PATH)
     app.state.photos = PhotoStore(PHOTOS_DIR)
     app.state.floorplans = FloorplanStore(FLOORPLANS_DIR)
