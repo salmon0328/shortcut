@@ -24,7 +24,11 @@ Thumbs.db
 data/reports.json
 data/graph_overrides.json
 data/photos/
-data/floorplans/
+
+# Not ignored for now, unlike the rest of the runtime state above: committing
+# the plan store is what lets a fresh clone draw the map without anyone
+# running scripts/install_floorplans.py first. The cost is that a floorplan
+# uploaded through admin mode now shows up as a local change.
 
 # Handover notes, shared by hand rather than committed.
 HANDOVER.md

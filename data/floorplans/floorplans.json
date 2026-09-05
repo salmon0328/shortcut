@@ -1,0 +1,28 @@
+[
+  {
+    "id": "730d7afd023f434eb021042df688f8c1",
+    "building": "Hive",
+    "floor": "B4",
+    "filename": "730d7afd023f434eb021042df688f8c1.png",
+    "content_type": "image/png",
+    "size_bytes": 838290,
+    "uploaded_at": "2026-09-05T06:09:02+00:00",
+    "origin_x_m": -4.9108,
+    "origin_y_m": 1.6661,
+    "metres_per_pixel": 0.043846,
+    "note": "Traced from the team's Hive node map; scale fitted to the surveyed walking distances."
+  },
+  {
+    "id": "a5b95b29a19148879b6d19c4b8697b7d",
+    "building": "Hive",
+    "floor": "B5",
+    "filename": "a5b95b29a19148879b6d19c4b8697b7d.png",
+    "content_type": "image/png",
+    "size_bytes": 683882,
+    "uploaded_at": "2026-09-05T06:09:02+00:00",
+    "origin_x_m": 0.0,
+    "origin_y_m": 0.0,
+    "metres_per_pixel": 0.043846,
+    "note": "Traced from the team's Hive node map; scale fitted to the surveyed walking distances."
+  }
+]

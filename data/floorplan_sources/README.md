@@ -1,9 +1,12 @@
 # Floorplan sources
 
 The two plans Shortcut draws routes on, and the numbers that say where the
-map sits on them. Committed, because they are survey output. The store they
-get loaded into, `data/floorplans/`, is runtime state and gitignored — so
-after a fresh clone, run:
+map sits on them. Committed, because they are survey output.
+
+`data/floorplans/` — the store the app actually reads — is committed too for
+now, so a fresh clone draws the map with no setup. That makes this folder the
+*source* and that one the *built copy*. Rebuild it after changing anything
+here:
 
 ```bash
 .venv/bin/python scripts/install_floorplans.py --replace
