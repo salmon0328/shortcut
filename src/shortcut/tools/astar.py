@@ -32,8 +32,10 @@ __all__ = [
     "edge_metres",
     "prefer_lift_cost",
     "least_walking_cost",
+    "sheltered_cost",
     "DEFAULT_STAIRS_PENALTY_SECONDS",
     "DEFAULT_WALKING_WEIGHT",
+    "DEFAULT_EXPOSURE_PENALTY_SECONDS",
     "find_alternatives",
     "zero_heuristic",
     "heuristic_for",
@@ -154,10 +156,21 @@ def edge_metres(edge: Edge) -> float:
     return edge.distance_m
 
 
-# How much extra walking time someone would accept to avoid one flight of
-# stairs. Tunable: 60 seconds is enough that a lift wins wherever one exists
-# in the current graph, while still leaving stairs usable as a last resort.
-DEFAULT_STAIRS_PENALTY_SECONDS = 60.0
+# How much extra travelling someone would accept to avoid one flight of
+# stairs. Ten minutes, which is deliberately more than any detour inside a
+# single building can cost: someone who asks to avoid stairs usually cannot
+# use them at all, so "prefer" has to mean "unless there is genuinely no
+# other way", not "unless it is a bit slower".
+#
+# An earlier 60 seconds was too small and quietly failed in exactly the case
+# that matters. It looked right against the synthetic two-node graph in the
+# tests, where the lift is only 25 seconds dearer than the stairs, but the
+# real lift between B5 and B4 is 87 seconds dearer once you count walking to
+# it - so a wheelchair user asking for less climbing was sent to a staircase.
+# Any fixed number is a bet on the size of the building; this one is sized
+# for the Hive, and a campus-wide graph would want the preference expressed
+# lexicographically instead.
+DEFAULT_STAIRS_PENALTY_SECONDS = 600.0
 
 
 def prefer_lift_cost(
@@ -169,6 +182,12 @@ def prefer_lift_cost(
     entirely can leave someone with no route at all; a penalty only makes
     stairs a last resort, so a route is still returned when the lift is out
     of reach or blocked.
+
+    The penalty is large on purpose - see
+    :data:`DEFAULT_STAIRS_PENALTY_SECONDS`. It has to outweigh a busy lift as
+    well as a slow one: somebody who has said they would rather not climb has
+    already accepted the wait, and a queue is not a reason to send them up a
+    staircase they may not be able to use.
     """
 
     def cost(edge: Edge) -> float:
@@ -447,6 +466,32 @@ def _worse_by(route: Route, than: Route, axis: str) -> float:
     if axis == "seconds":
         return route.total_seconds - than.total_seconds
     return route.walking_distance_m - than.walking_distance_m
+
+
+# How many seconds of detour someone would accept to avoid one metre of rain.
+# 45 is deliberately less than the stairs penalty: getting wet is unpleasant,
+# whereas a flight of stairs can be impassable. A sheltered route that costs
+# two extra minutes is a good trade; one that costs ten is not, and at this
+# weight the search will say so.
+DEFAULT_EXPOSURE_PENALTY_SECONDS = 45.0
+
+
+def sheltered_cost(
+    exposure_penalty_seconds: float = DEFAULT_EXPOSURE_PENALTY_SECONDS,
+    base: CostFunction = edge_seconds,
+) -> CostFunction:
+    """Time, with every uncovered stretch charged extra.
+
+    The soft counterpart to ``sheltered_only``. The hard filter is the right
+    answer when someone genuinely cannot get wet, but it fails with no route
+    at all the moment the only way across is open to the sky. This prefers
+    shelter and still answers, which is what "it is raining" usually means.
+    """
+
+    def cost(edge: Edge) -> float:
+        return base(edge) + (0.0 if edge.covered else exposure_penalty_seconds)
+
+    return cost
 
 
 def find_alternatives(

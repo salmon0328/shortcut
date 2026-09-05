@@ -37,6 +37,7 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
+from shortcut.crowding import crowd_waits, with_crowding
 from shortcut.graph_store import CampusGraph, Edge, UnknownNodeError, load_graph
 from shortcut.overrides import (
     LIVE_CONDITION_FIELDS,
@@ -88,11 +89,19 @@ from shortcut.tools.astar import (
     edge_seconds,
     find_alternatives,
     find_route,
+    find_route_or_none,
     least_walking_cost,
     prefer_lift_cost,
+    sheltered_cost,
 )
 
-__all__ = ["app", "get_graph", "CAMPUS_GRAPH_PATH", "DEV_ALLOWED_ORIGINS"]
+__all__ = [
+    "app",
+    "get_graph",
+    "CAMPUS_GRAPH_PATH",
+    "DEV_ALLOWED_ORIGINS",
+    "AI_ROUTES_ENABLED",
+]
 
 
 # --------------------------------------------------------------------------
@@ -262,7 +271,21 @@ def cost_for(route_request: RouteRequest) -> CostFunction:
         return prefer_lift_cost()
     if route_request.preference == "least_walking":
         return least_walking_cost()
+    if route_request.preference == "sheltered":
+        return sheltered_cost()
     return edge_seconds
+
+
+def live_cost_for(
+    route_request: RouteRequest, graph: CampusGraph, reports: ReportStore
+) -> CostFunction:
+    """The requested scoring, made slower wherever people say it is busy.
+
+    Kept separate from :func:`cost_for` so the preference logic stays a pure
+    function of the request, testable without a report store. Crowding is the
+    one input that depends on what time it is.
+    """
+    return with_crowding(cost_for(route_request), crowd_waits(graph, reports.all()))
 
 
 def edge_filter_for(route_request: RouteRequest) -> EdgeFilter | None:
@@ -390,6 +413,7 @@ def post_route(
     route_request: RouteRequest,
     graph: CampusGraph = Depends(get_graph),
     photos: PhotoStore = Depends(get_photos),
+    reports: ReportStore = Depends(get_reports),
 ) -> RouteResponse:
     """Return the quickest route from ``origin`` to ``destination``.
 
@@ -406,7 +430,7 @@ def post_route(
             graph,
             route_request.origin,
             route_request.destination,
-            cost=cost_for(route_request),
+            cost=live_cost_for(route_request, graph, reports),
             edge_filter=edge_filter_for(route_request),
         )
     except UnknownNodeError as error:
@@ -1131,12 +1155,14 @@ _TRADE_AXIS = {
     "fastest": ("seconds", "walking"),
     "prefer_lift": ("seconds", "walking"),
     "least_walking": ("walking", "seconds"),
+    "sheltered": ("seconds", "walking"),
 }
 
 _PREFERENCE_LABELS = {
     "fastest": "Fastest",
     "prefer_lift": "Less climbing",
     "least_walking": "Less walking",
+    "sheltered": "Driest",
 }
 
 
@@ -1159,6 +1185,68 @@ def _describe_trade(option: Route, against: Route) -> str:
     return ", ".join(parts) if parts else "About the same, a different way round"
 
 
+# Ways a route can differ in *kind* rather than in numbers.
+#
+# find_alternatives only offers a route that beats the chosen one on a
+# measure - fewer metres, fewer seconds. That misses the comparison people
+# most often want. Asked for the quickest way, it will never mention the
+# step-free one, because going by lift walks you further and takes longer:
+# it loses on every number it is scored by, and is still exactly what someone
+# with a suitcase or a knee injury needs to see.
+#
+# So these are offered on the strength of what they *are*. Each names a
+# property, how to say it, and the rule an edge must satisfy to keep it.
+_CHARACTERISTIC_OPTIONS: tuple[tuple[str, str, EdgeFilter], ...] = (
+    ("uses_stairs", "Step-free", lambda edge: not edge.stairs),
+    ("exposed", "Stays dry", lambda edge: edge.covered),
+)
+
+
+def _lacks(route: Route, graph: CampusGraph, characteristic: str) -> bool:
+    """Whether ``route`` fails to have the property, so it is worth offering."""
+    edges = [graph.edge_by_id(edge_id) for edge_id in route.edge_ids]
+    if characteristic == "uses_stairs":
+        return any(edge.stairs for edge in edges)
+    return any(not edge.covered for edge in edges)
+
+
+def _characteristic_alternatives(
+    route_request: RouteRequest,
+    graph: CampusGraph,
+    best: Route,
+    cost: CostFunction,
+    edge_filter: EdgeFilter | None,
+) -> list[tuple[Route, str]]:
+    """Routes worth showing because of what they are, not what they score.
+
+    Only ever returns a route the chosen one is not already, and never the
+    same path twice, so nothing is offered as an alternative to itself.
+    """
+    found: list[tuple[Route, str]] = []
+    seen = {best.node_ids}
+
+    for characteristic, label, rule in _CHARACTERISTIC_OPTIONS:
+        if not _lacks(best, graph, characteristic):
+            continue
+
+        def passes(edge: Edge, rule: EdgeFilter = rule) -> bool:
+            return rule(edge) and (edge_filter(edge) if edge_filter else True)
+
+        candidate = find_route_or_none(
+            graph,
+            route_request.origin,
+            route_request.destination,
+            cost=cost,
+            edge_filter=passes,
+        )
+        if candidate is None or candidate.node_ids in seen:
+            continue
+        seen.add(candidate.node_ids)
+        found.append((candidate, label))
+
+    return found
+
+
 @app.post(
     "/route/options",
     response_model=RouteChoices,
@@ -1169,6 +1257,7 @@ def post_route_options(
     route_request: RouteRequest,
     graph: CampusGraph = Depends(get_graph),
     photos: PhotoStore = Depends(get_photos),
+    reports: ReportStore = Depends(get_reports),
 ) -> RouteChoices:
     """Return the best route for the request, and up to two alternatives.
 
@@ -1177,7 +1266,7 @@ def post_route_options(
     are shown one that walks you less, ask to walk less and you are shown one
     that is quicker.
     """
-    cost = cost_for(route_request)
+    cost = live_cost_for(route_request, graph, reports)
     edge_filter = edge_filter_for(route_request)
 
     try:
@@ -1234,6 +1323,12 @@ def post_route_options(
                 _describe_trade(route, best),
             )
             for route in others
+        ]
+        + [
+            as_option(route, label, _describe_trade(route, best))
+            for route, label in _characteristic_alternatives(
+                route_request, graph, best, cost, edge_filter
+            )
         ],
     )
 
@@ -1298,3 +1393,29 @@ def get_pending_changes(
         graduating=sum(1 for c in changes if c.graduating_fields),
         live_only=sum(1 for c in changes if not c.graduating_fields),
     )
+
+
+# --------------------------------------------------------------------------
+# The agentic layer, if it is installed
+# --------------------------------------------------------------------------
+#
+# Guarded on purpose. The AI dependencies live in a separate requirements
+# file, and a machine with none of them must still serve every endpoint above
+# and still pass the whole core test suite. A missing dependency degrades to
+# "no /ai routes", never to a server that will not start.
+#
+# ImportError only, never a bare except: a genuine mistake inside the AI code
+# has to surface as an error, not disappear into "the AI is unavailable".
+#
+# The router is built with this module's own get_graph handed in, rather than
+# imported from here by the router, which keeps the dependency pointing one
+# way and lets tests override the graph for /ai/* exactly as they do for
+# /route. See shortcut/ai/routes.py.
+
+try:
+    from shortcut.ai.routes import build_ai_router
+except ImportError:  # pragma: no cover - only on a machine without the extras
+    AI_ROUTES_ENABLED = False
+else:
+    app.include_router(build_ai_router(graph_dependency=get_graph))
+    AI_ROUTES_ENABLED = True

@@ -278,20 +278,43 @@ def test_approving_a_blockage_reroutes_around_it(client: TestClient) -> None:
     assert REPORTED_EDGE not in route_edges(client)
 
 
-def test_approving_a_crowded_report_warns_without_rerouting(
+def test_approving_a_crowded_report_warns_without_closing_anything(
     client: TestClient,
 ) -> None:
-    """A busy corridor is still walkable, so routing must not avoid it."""
-    before = route_edges(client)
+    """A busy place is slower, not shut. The map itself must not change.
+
+    ``routing_changed`` is about the map, and crowding never touches it:
+    the extra seconds are worked out per request and expire on their own
+    (see :mod:`shortcut.crowding`). So nothing is closed, and the warning
+    still reaches the places screen.
+    """
     submit(client, target_kind="node", target_id=CROWDED_NODE, condition="crowded")
 
     result = client.post(f"/reports/groups/{CROWDED_KEY}/approve").json()
 
     assert result["routing_changed"] is False
-    assert route_edges(client) == before
 
     node = next(n for n in client.get("/nodes").json() if n["id"] == CROWDED_NODE)
     assert node["condition"] == "crowded"
+
+
+def test_a_crowded_place_is_routed_around_but_still_reachable(
+    client: TestClient,
+) -> None:
+    """The whole point of pricing crowding rather than blocking it.
+
+    Somewhere busy should stop being on the quickest way through, while
+    staying somewhere you can still be sent when it is where you asked for.
+    """
+    before = route_edges(client)
+    submit(client, target_kind="node", target_id=CROWDED_NODE, condition="crowded")
+
+    assert route_edges(client) != before, "a busy place should stop being the quick way"
+
+    still_reachable = client.post(
+        "/route", json={"origin": "Hive_B5_A", "destination": CROWDED_NODE}
+    )
+    assert still_reachable.status_code == 200
 
 
 def test_approving_marks_every_report_in_the_group(client: TestClient) -> None:
