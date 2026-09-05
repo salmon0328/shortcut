@@ -18,6 +18,20 @@ import shortcut.api as api
 from shortcut.blob_store import LocalBlobStore, S3BlobStore
 from shortcut.dotenv import load_dotenv
 
+
+@pytest.fixture(autouse=True)
+def scratch_environ(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Give every test here its own copy of the environment.
+
+    The loader writes to ``os.environ``. Cleaning up name by name with
+    ``delenv`` is a trap: deleting a name that was absent records nothing,
+    so a later delete of the same name gets *restored* at teardown and leaks
+    into the next test. Swapping the whole mapping for a copy, and letting
+    monkeypatch put the real one back, cannot leak anything.
+    """
+    monkeypatch.setattr(os, "environ", dict(os.environ))
+
+
 # --------------------------------------------------------------------------
 # The loader on its own
 # --------------------------------------------------------------------------
@@ -27,11 +41,9 @@ def test_a_missing_file_is_not_an_error(tmp_path: Path) -> None:
     assert load_dotenv(tmp_path / "absent.env") == []
 
 
-def test_values_are_set_and_reported(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.delenv("DOTENV_TEST_A", raising=False)
-    monkeypatch.delenv("DOTENV_TEST_B", raising=False)
+def test_values_are_set_and_reported(tmp_path: Path) -> None:
+    os.environ.pop("DOTENV_TEST_A", None)
+    os.environ.pop("DOTENV_TEST_B", None)
     env = tmp_path / ".env"
     env.write_text(
         "# a comment\n"
@@ -48,15 +60,11 @@ def test_values_are_set_and_reported(
     assert os.environ["DOTENV_TEST_A"] == "plain"
     assert os.environ["DOTENV_TEST_B"] == "quoted value"
 
-    monkeypatch.delenv("DOTENV_TEST_A")
-    monkeypatch.delenv("DOTENV_TEST_B")
 
-
-def test_a_blank_value_is_left_unset(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_a_blank_value_is_left_unset(tmp_path: Path) -> None:
     """``AWS_PROFILE=`` copied from the example must not become a profile named ""."""
-    monkeypatch.delenv("DOTENV_TEST_A", raising=False)
+    os.environ.pop("DOTENV_TEST_A", None)
+    os.environ.pop("DOTENV_TEST_B", None)
     env = tmp_path / ".env"
     env.write_text("DOTENV_TEST_A=\nDOTENV_TEST_B=''\n", encoding="utf-8")
 
@@ -65,11 +73,9 @@ def test_a_blank_value_is_left_unset(
     assert "DOTENV_TEST_B" not in os.environ
 
 
-def test_the_real_environment_wins(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_the_real_environment_wins(tmp_path: Path) -> None:
     """A value set in the shell is deliberate, and the file must not undo it."""
-    monkeypatch.setenv("DOTENV_TEST_A", "from the shell")
+    os.environ["DOTENV_TEST_A"] = "from the shell"
     env = tmp_path / ".env"
     env.write_text("DOTENV_TEST_A=from the file\n", encoding="utf-8")
 
@@ -99,9 +105,6 @@ def test_startup_reads_the_bucket_from_dotenv(
         store = api.app.state.photos._blobs
         assert isinstance(store, S3BlobStore)
         assert store.bucket == "dotenv-test-bucket"
-
-    # Undo what startup set, so nothing leaks into the next test.
-    monkeypatch.delenv("SHORTCUT_S3_BUCKET", raising=False)
 
 
 def test_without_dotenv_photos_stay_on_disk() -> None:
