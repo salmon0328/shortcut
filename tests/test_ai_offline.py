@@ -20,7 +20,7 @@ from shortcut.ai.prompts import PARSE_VERSION, PARSE_SYSTEM, parse_user_message
 from shortcut.ai.schemas import ParsedIntent
 from shortcut.graph_store import CampusGraph
 
-ENTRANCE = "Hive_B5_D"
+ENTRANCE = "Hive_B5_I"
 COURTYARD = "Hive_B5_G"
 
 

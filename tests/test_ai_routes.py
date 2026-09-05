@@ -159,7 +159,7 @@ def test_a_sentence_becomes_a_real_route_request(client: TestClient) -> None:
     body = parse(client).json()
 
     assert body["needs_clarification"] is False
-    assert body["request"]["origin"] == "Hive_B5_D"
+    assert body["request"]["origin"] == "Hive_B5_I"
     assert body["request"]["destination"] == "Hive_B5_G"
 
 
@@ -184,7 +184,7 @@ def test_what_the_controls_already_say_is_respected(client: TestClient) -> None:
     body = parse(
         client,
         current={
-            "origin": "Hive_B5_D",
+            "origin": "Hive_B5_I",
             "destination": "Hive_B5_G",
             "allow_stairs": False,
         },

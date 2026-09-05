@@ -27,11 +27,11 @@ from shortcut.tools.astar import (
 # even though B4 is surveyed too: every way down and back costs more than a
 # minute, so the cross-floor edges cannot shorten it. That is deliberate - the
 # golden route should pin the search, not the size of the survey.
-#   Hive_B5_A --(Hive_B5_002)-> Hive_B5_G --(Hive_B5_007)-> Hive_B5_C
-ORIGIN = "Hive_B5_A"
-DESTINATION = "Hive_B5_C"
-EXPECTED_NODES = ("Hive_B5_A", "Hive_B5_G", "Hive_B5_C")
-EXPECTED_EDGES = ("Hive_B5_002", "Hive_B5_007")
+#   Main Staircase --(001)-> Lift Lobby --(002)-> Courtyard --(015)-> Main Entrance
+ORIGIN = "Hive_B5_B"
+DESTINATION = "Hive_B5_I"
+EXPECTED_NODES = ("Hive_B5_B", "Hive_B5_A", "Hive_B5_G", "Hive_B5_I")
+EXPECTED_EDGES = ("Hive_B5_001", "Hive_B5_002", "Hive_B5_015")
 
 
 # --------------------------------------------------------------------------
@@ -158,7 +158,7 @@ def test_total_walking_time_matches_graph_values(graph: CampusGraph) -> None:
     expected_seconds = total_seconds_of(graph, EXPECTED_EDGES)
 
     assert route.total_seconds == pytest.approx(expected_seconds)
-    assert route.total_seconds == pytest.approx(29.0)  # 21 + 8
+    assert route.total_seconds == pytest.approx(24.0)  # 3 + 9 + 12
 
 
 def test_total_distance_matches_graph_values(graph: CampusGraph) -> None:
@@ -167,7 +167,7 @@ def test_total_distance_matches_graph_values(graph: CampusGraph) -> None:
     expected_metres = sum(edge_by_id(graph, e).distance_m for e in EXPECTED_EDGES)
 
     assert route.total_distance_m == pytest.approx(expected_metres)
-    assert route.total_distance_m == pytest.approx(40.6)  # 29.4 + 11.2
+    assert route.total_distance_m == pytest.approx(33.6)  # 4.2 + 12.6 + 16.8
 
 
 def test_route_edges_actually_join_the_nodes(graph: CampusGraph) -> None:
@@ -242,7 +242,7 @@ def test_a_lift_edge_is_reported(tmp_path: Path) -> None:
 def test_route_is_cheaper_than_a_known_alternative(graph: CampusGraph) -> None:
     """Sanity check that the search really minimises, rather than just walking."""
     route = find_route(graph, ORIGIN, DESTINATION)
-    alternative = ("Hive_B5_001", "Hive_B5_012", "Hive_B5_006")
+    alternative = ("Hive_B5_004", "Hive_B5_010", "Hive_B5_012")  # via Pick Lockers
 
     assert route.total_seconds < total_seconds_of(graph, alternative)
 
@@ -286,7 +286,7 @@ def test_blocked_edge_is_avoided_when_an_alternative_exists(
     graph_with_blocked_edges: Callable[[set[str]], CampusGraph],
 ) -> None:
     """Blocking the first hop must push the route onto a different, valid path."""
-    blocked_id = EXPECTED_EDGES[0]  # Hive_B5_002, Hive_B5_A -> Hive_B5_G
+    blocked_id = EXPECTED_EDGES[0]  # Hive_B5_001, Main Staircase -> Lift Lobby
     detour_graph = graph_with_blocked_edges({blocked_id})
 
     detour = find_route(detour_graph, ORIGIN, DESTINATION)
@@ -302,7 +302,7 @@ def test_no_blocked_edge_ever_appears_in_a_route(
     graph_with_blocked_edges: Callable[[set[str]], CampusGraph],
 ) -> None:
     """Whatever path is chosen, none of its edges may be marked blocked."""
-    detour_graph = graph_with_blocked_edges({"Hive_B5_002", "Hive_B5_013"})
+    detour_graph = graph_with_blocked_edges({"Hive_B5_001", "Hive_B5_002"})
 
     route = find_route(detour_graph, ORIGIN, DESTINATION)
 
@@ -313,16 +313,18 @@ def test_no_blocked_edge_ever_appears_in_a_route(
 def test_blocking_every_edge_of_a_node_makes_it_unreachable(
     graph_with_blocked_edges: Callable[[set[str]], CampusGraph],
 ) -> None:
-    """Hive_B5_B has two ways out: the corridor to the lobby, and the lift.
+    """The Main Staircase has three ways out: two corridors and its own stairs.
 
-    Block both and the lift is stranded on its own floor, which is the point:
-    a place is only unreachable once every edge touching it is closed.
+    Block all three and it is stranded, which is the point: a place is only
+    unreachable once every edge touching it is closed.
     """
-    cut_off_graph = graph_with_blocked_edges({"Hive_B5_004", "Hive_B5_015"})
+    cut_off_graph = graph_with_blocked_edges(
+        {"Hive_B5_001", "Hive_B5_004", "Hive_Stairs_B"}
+    )
 
     assert cut_off_graph.neighbours("Hive_B5_B") == []
     with pytest.raises(NoRouteFoundError):
-        find_route(cut_off_graph, ORIGIN, "Hive_B5_B")
+        find_route(cut_off_graph, "Hive_B5_G", "Hive_B5_B")
 
 
 # --------------------------------------------------------------------------

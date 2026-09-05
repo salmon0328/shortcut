@@ -2,35 +2,35 @@
   "nodes": [
     {
       "id": "Hive_B5_A",
+      "name": "Lift Lobby",
+      "building": "Hive",
+      "floor": "B5",
+      "type": "junction"
+    },
+    {
+      "id": "Hive_B5_B",
+      "name": "Main Staircase",
+      "building": "Hive",
+      "floor": "B5",
+      "type": "stairs"
+    },
+    {
+      "id": "Hive_B5_C",
       "name": "Staircase 1",
       "building": "Hive",
       "floor": "B5",
       "type": "stairs"
     },
     {
-      "id": "Hive_B5_B",
-      "name": "Lift",
-      "building": "Hive",
-      "floor": "B5",
-      "type": "lift"
-    },
-    {
-      "id": "Hive_B5_C",
-      "name": "Staircase 3",
+      "id": "Hive_B5_D",
+      "name": "Staircase 2",
       "building": "Hive",
       "floor": "B5",
       "type": "stairs"
     },
     {
-      "id": "Hive_B5_D",
-      "name": "Main Entrance",
-      "building": "Hive",
-      "floor": "B5",
-      "type": "junction"
-    },
-    {
       "id": "Hive_B5_E",
-      "name": "Staircase 2",
+      "name": "Staircase 3",
       "building": "Hive",
       "floor": "B5",
       "type": "stairs"
@@ -51,35 +51,35 @@
     },
     {
       "id": "Hive_B5_H",
-      "name": "Lift Lobby",
+      "name": "Side Entrance",
       "building": "Hive",
       "floor": "B5",
       "type": "junction"
     },
     {
       "id": "Hive_B5_I",
-      "name": "Main Staircase",
+      "name": "Main Entrance",
       "building": "Hive",
       "floor": "B5",
-      "type": "stairs"
+      "type": "junction"
     },
     {
       "id": "Hive_B4_A",
-      "name": "Staircase 1",
+      "name": "Lift Lobby",
+      "building": "Hive",
+      "floor": "B4",
+      "type": "junction"
+    },
+    {
+      "id": "Hive_B4_B",
+      "name": "Main Staircase",
       "building": "Hive",
       "floor": "B4",
       "type": "stairs"
     },
     {
-      "id": "Hive_B4_B",
-      "name": "Lift",
-      "building": "Hive",
-      "floor": "B4",
-      "type": "lift"
-    },
-    {
       "id": "Hive_B4_C",
-      "name": "Staircase 3",
+      "name": "Staircase 1",
       "building": "Hive",
       "floor": "B4",
       "type": "stairs"
@@ -93,28 +93,21 @@
     },
     {
       "id": "Hive_B4_E",
-      "name": "Side Entrance",
+      "name": "Staircase 3",
       "building": "Hive",
       "floor": "B4",
-      "type": "junction"
+      "type": "stairs"
     },
     {
       "id": "Hive_B4_F",
-      "name": "Back Entrance",
+      "name": "Side Entrance 1",
       "building": "Hive",
       "floor": "B4",
       "type": "junction"
     },
     {
       "id": "Hive_B4_G",
-      "name": "Main Staircase",
-      "building": "Hive",
-      "floor": "B4",
-      "type": "stairs"
-    },
-    {
-      "id": "Hive_B4_H",
-      "name": "Lift Lobby",
+      "name": "Side Entrance 2",
       "building": "Hive",
       "floor": "B4",
       "type": "junction"
@@ -124,9 +117,9 @@
     {
       "id": "Hive_B5_001",
       "from": "Hive_B5_A",
-      "to": "Hive_B5_H",
-      "distance_m": 22.4,
-      "walk_seconds": 16,
+      "to": "Hive_B5_B",
+      "distance_m": 4.2,
+      "walk_seconds": 3,
       "covered": true,
       "stairs": false,
       "lift": false,
@@ -136,8 +129,8 @@
       "id": "Hive_B5_002",
       "from": "Hive_B5_A",
       "to": "Hive_B5_G",
-      "distance_m": 29.4,
-      "walk_seconds": 21,
+      "distance_m": 12.6,
+      "walk_seconds": 9,
       "covered": true,
       "stairs": false,
       "lift": false,
@@ -146,9 +139,9 @@
     {
       "id": "Hive_B5_003",
       "from": "Hive_B5_A",
-      "to": "Hive_B5_E",
-      "distance_m": 30.8,
-      "walk_seconds": 22,
+      "to": "Hive_B5_C",
+      "distance_m": 22.4,
+      "walk_seconds": 16,
       "covered": true,
       "stairs": false,
       "lift": false,
@@ -157,9 +150,9 @@
     {
       "id": "Hive_B5_004",
       "from": "Hive_B5_B",
-      "to": "Hive_B5_H",
-      "distance_m": 5,
-      "walk_seconds": 6,
+      "to": "Hive_B5_F",
+      "distance_m": 16.8,
+      "walk_seconds": 12,
       "covered": true,
       "stairs": false,
       "lift": false,
@@ -168,9 +161,9 @@
     {
       "id": "Hive_B5_005",
       "from": "Hive_B5_C",
-      "to": "Hive_B5_D",
-      "distance_m": 14,
-      "walk_seconds": 10,
+      "to": "Hive_B5_G",
+      "distance_m": 29.4,
+      "walk_seconds": 21,
       "covered": true,
       "stairs": false,
       "lift": false,
@@ -179,9 +172,9 @@
     {
       "id": "Hive_B5_006",
       "from": "Hive_B5_C",
-      "to": "Hive_B5_F",
-      "distance_m": 14,
-      "walk_seconds": 10,
+      "to": "Hive_B5_H",
+      "distance_m": 23.8,
+      "walk_seconds": 17,
       "covered": true,
       "stairs": false,
       "lift": false,
@@ -189,7 +182,7 @@
     },
     {
       "id": "Hive_B5_007",
-      "from": "Hive_B5_C",
+      "from": "Hive_B5_D",
       "to": "Hive_B5_G",
       "distance_m": 11.2,
       "walk_seconds": 8,
@@ -201,9 +194,9 @@
     {
       "id": "Hive_B5_008",
       "from": "Hive_B5_D",
-      "to": "Hive_B5_E",
-      "distance_m": 12.6,
-      "walk_seconds": 9,
+      "to": "Hive_B5_H",
+      "distance_m": 7.0,
+      "walk_seconds": 5,
       "covered": true,
       "stairs": false,
       "lift": false,
@@ -212,9 +205,9 @@
     {
       "id": "Hive_B5_009",
       "from": "Hive_B5_D",
-      "to": "Hive_B5_G",
-      "distance_m": 16.8,
-      "walk_seconds": 12,
+      "to": "Hive_B5_I",
+      "distance_m": 12.6,
+      "walk_seconds": 9,
       "covered": true,
       "stairs": false,
       "lift": false,
@@ -222,6 +215,17 @@
     },
     {
       "id": "Hive_B5_010",
+      "from": "Hive_B5_E",
+      "to": "Hive_B5_F",
+      "distance_m": 14.0,
+      "walk_seconds": 10,
+      "covered": true,
+      "stairs": false,
+      "lift": false,
+      "blocked": false
+    },
+    {
+      "id": "Hive_B5_011",
       "from": "Hive_B5_E",
       "to": "Hive_B5_G",
       "distance_m": 11.2,
@@ -232,10 +236,10 @@
       "blocked": false
     },
     {
-      "id": "Hive_B5_011",
-      "from": "Hive_B5_F",
-      "to": "Hive_B5_G",
-      "distance_m": 14,
+      "id": "Hive_B5_012",
+      "from": "Hive_B5_E",
+      "to": "Hive_B5_I",
+      "distance_m": 14.0,
       "walk_seconds": 10,
       "covered": true,
       "stairs": false,
@@ -243,9 +247,31 @@
       "blocked": false
     },
     {
-      "id": "Hive_B5_012",
+      "id": "Hive_B5_013",
       "from": "Hive_B5_F",
+      "to": "Hive_B5_G",
+      "distance_m": 14.0,
+      "walk_seconds": 10,
+      "covered": true,
+      "stairs": false,
+      "lift": false,
+      "blocked": false
+    },
+    {
+      "id": "Hive_B5_014",
+      "from": "Hive_B5_G",
       "to": "Hive_B5_H",
+      "distance_m": 8.4,
+      "walk_seconds": 6,
+      "covered": true,
+      "stairs": false,
+      "lift": false,
+      "blocked": false
+    },
+    {
+      "id": "Hive_B5_015",
+      "from": "Hive_B5_G",
+      "to": "Hive_B5_I",
       "distance_m": 16.8,
       "walk_seconds": 12,
       "covered": true,
@@ -254,45 +280,86 @@
       "blocked": false
     },
     {
-      "id": "Hive_B5_013",
-      "from": "Hive_B5_G",
-      "to": "Hive_B5_H",
-      "distance_m": 12.6,
-      "walk_seconds": 9,
-      "covered": true,
-      "stairs": false,
-      "lift": false,
-      "blocked": false
-    },
-    {
-      "id": "Hive_B5_014",
-      "from": "Hive_B5_H",
-      "to": "Hive_B5_I",
-      "distance_m": 8,
-      "walk_seconds": 9,
-      "covered": true,
-      "stairs": false,
-      "lift": false,
-      "blocked": false
-    },
-    {
-      "id": "Hive_B4_A--Hive_B5_A",
+      "id": "Hive_B4_001",
       "from": "Hive_B4_A",
-      "to": "Hive_B5_A",
-      "distance_m": 15.0,
-      "walk_seconds": 20.0,
+      "to": "Hive_B4_B",
+      "distance_m": 4.2,
+      "walk_seconds": 3,
       "covered": true,
-      "stairs": true,
+      "stairs": false,
       "lift": false,
-      "shuttle": false,
-      "wait_seconds": 0.0,
-      "blocked": false,
-      "one_way": false
+      "blocked": false
     },
     {
-      "id": "Hive_B5_015",
-      "from": "Hive_B5_B",
-      "to": "Hive_B4_B",
+      "id": "Hive_B4_002",
+      "from": "Hive_B4_A",
+      "to": "Hive_B4_C",
+      "distance_m": 30.8,
+      "walk_seconds": 22,
+      "covered": true,
+      "stairs": false,
+      "lift": false,
+      "blocked": false
+    },
+    {
+      "id": "Hive_B4_003",
+      "from": "Hive_B4_A",
+      "to": "Hive_B4_E",
+      "distance_m": 32.2,
+      "walk_seconds": 23,
+      "covered": true,
+      "stairs": false,
+      "lift": false,
+      "blocked": false
+    },
+    {
+      "id": "Hive_B4_004",
+      "from": "Hive_B4_C",
+      "to": "Hive_B4_F",
+      "distance_m": 11.2,
+      "walk_seconds": 8,
+      "covered": true,
+      "stairs": false,
+      "lift": false,
+      "blocked": false
+    },
+    {
+      "id": "Hive_B4_005",
+      "from": "Hive_B4_D",
+      "to": "Hive_B4_E",
+      "distance_m": 25.2,
+      "walk_seconds": 18,
+      "covered": true,
+      "stairs": false,
+      "lift": false,
+      "blocked": false
+    },
+    {
+      "id": "Hive_B4_006",
+      "from": "Hive_B4_D",
+      "to": "Hive_B4_G",
+      "distance_m": 11.2,
+      "walk_seconds": 8,
+      "covered": true,
+      "stairs": false,
+      "lift": false,
+      "blocked": false
+    },
+    {
+      "id": "Hive_B4_007",
+      "from": "Hive_B4_F",
+      "to": "Hive_B4_G",
+      "distance_m": 11.2,
+      "walk_seconds": 8,
+      "covered": true,
+      "stairs": false,
+      "lift": false,
+      "blocked": false
+    },
+    {
+      "id": "Hive_Lift_A",
+      "from": "Hive_B5_A",
+      "to": "Hive_B4_A",
       "distance_m": 5.0,
       "walk_seconds": 15,
       "covered": true,
@@ -303,10 +370,10 @@
       "note": "wait_seconds is the off-peak typical wait, measured on site. The peak wait reaches about 180 s; that variance is modelled by crowd reports at routing time rather than baked in here."
     },
     {
-      "id": "Hive_B5_016",
-      "from": "Hive_B5_I",
-      "to": "Hive_B4_G",
-      "distance_m": 15,
+      "id": "Hive_Stairs_B",
+      "from": "Hive_B5_B",
+      "to": "Hive_B4_B",
+      "distance_m": 15.0,
       "walk_seconds": 20,
       "covered": true,
       "stairs": true,
@@ -314,21 +381,10 @@
       "blocked": false
     },
     {
-      "id": "Hive_B5_018",
-      "from": "Hive_B5_E",
-      "to": "Hive_B4_D",
-      "distance_m": 15,
-      "walk_seconds": 20,
-      "covered": true,
-      "stairs": true,
-      "lift": false,
-      "blocked": false
-    },
-    {
-      "id": "Hive_B5_019",
+      "id": "Hive_Stairs_C",
       "from": "Hive_B5_C",
       "to": "Hive_B4_C",
-      "distance_m": 15,
+      "distance_m": 15.0,
       "walk_seconds": 20,
       "covered": true,
       "stairs": true,
@@ -336,90 +392,24 @@
       "blocked": false
     },
     {
-      "id": "Hive_B4_001",
-      "from": "Hive_B4_A",
-      "to": "Hive_B4_H",
-      "distance_m": 30.8,
-      "walk_seconds": 22,
-      "covered": true,
-      "stairs": false,
-      "lift": false,
-      "blocked": false
-    },
-    {
-      "id": "Hive_B4_002",
-      "from": "Hive_B4_A",
-      "to": "Hive_B4_F",
-      "distance_m": 11.2,
-      "walk_seconds": 8,
-      "covered": true,
-      "stairs": false,
-      "lift": false,
-      "blocked": false
-    },
-    {
-      "id": "Hive_B4_003",
-      "from": "Hive_B4_B",
-      "to": "Hive_B4_H",
-      "distance_m": 5,
-      "walk_seconds": 4,
-      "covered": true,
-      "stairs": false,
-      "lift": false,
-      "blocked": false
-    },
-    {
-      "id": "Hive_B4_004",
-      "from": "Hive_B4_C",
+      "id": "Hive_Stairs_D",
+      "from": "Hive_B5_D",
       "to": "Hive_B4_D",
-      "distance_m": 25.2,
-      "walk_seconds": 18,
+      "distance_m": 15.0,
+      "walk_seconds": 20,
       "covered": true,
-      "stairs": false,
+      "stairs": true,
       "lift": false,
       "blocked": false
     },
     {
-      "id": "Hive_B4_005",
-      "from": "Hive_B4_C",
-      "to": "Hive_B4_H",
-      "distance_m": 32.2,
-      "walk_seconds": 23,
-      "covered": true,
-      "stairs": false,
-      "lift": false,
-      "blocked": false
-    },
-    {
-      "id": "Hive_B4_006",
-      "from": "Hive_B4_D",
+      "id": "Hive_Stairs_E",
+      "from": "Hive_B5_E",
       "to": "Hive_B4_E",
-      "distance_m": 11.2,
-      "walk_seconds": 8,
+      "distance_m": 15.0,
+      "walk_seconds": 20,
       "covered": true,
-      "stairs": false,
-      "lift": false,
-      "blocked": false
-    },
-    {
-      "id": "Hive_B4_007",
-      "from": "Hive_B4_E",
-      "to": "Hive_B4_F",
-      "distance_m": 11.2,
-      "walk_seconds": 8,
-      "covered": true,
-      "stairs": false,
-      "lift": false,
-      "blocked": false
-    },
-    {
-      "id": "Hive_B4_008",
-      "from": "Hive_B4_G",
-      "to": "Hive_B4_H",
-      "distance_m": 8,
-      "walk_seconds": 9,
-      "covered": true,
-      "stairs": false,
+      "stairs": true,
       "lift": false,
       "blocked": false
     }

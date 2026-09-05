@@ -32,10 +32,11 @@ from shortcut.tools.astar import edge_seconds, find_route
 
 NOW = datetime(2026, 9, 5, 13, 0, tzinfo=timezone.utc)
 
-# The Courtyard sits on the quick way from Staircase 1 to Staircase 3, and it
-# has another way round. That is what makes it worth reporting.
+# The Courtyard sits on the quick way from the Lift Lobby to the Main
+# Entrance, and it has another way round. That is what makes it worth
+# reporting.
 CROWDED_NODE = "Hive_B5_G"
-QUICK_WAY = ("Hive_B5_A", "Hive_B5_G", "Hive_B5_C")
+QUICK_WAY = ("Hive_B5_A", "Hive_B5_G", "Hive_B5_I")
 
 
 def report(
@@ -170,14 +171,14 @@ def test_with_no_crowding_the_cost_function_is_handed_back_untouched() -> None:
 def test_the_quick_way_goes_through_the_courtyard_normally(
     graph: CampusGraph,
 ) -> None:
-    assert find_route(graph, "Hive_B5_A", "Hive_B5_C").node_ids == QUICK_WAY
+    assert find_route(graph, "Hive_B5_A", "Hive_B5_I").node_ids == QUICK_WAY
 
 
 def test_a_crowded_courtyard_is_routed_around(graph: CampusGraph) -> None:
     waits = crowd_waits(graph, [report(CROWDED_NODE)], NOW)
 
     route = find_route(
-        graph, "Hive_B5_A", "Hive_B5_C", cost=with_crowding(edge_seconds, waits)
+        graph, "Hive_B5_A", "Hive_B5_I", cost=with_crowding(edge_seconds, waits)
     )
 
     assert route.node_ids != QUICK_WAY
@@ -200,7 +201,7 @@ def test_a_crowded_place_you_asked_for_is_still_reachable(
 def test_a_crowded_lift_loses_to_the_stairs(graph: CampusGraph) -> None:
     """The case this was built for: the lift at ten to the hour."""
     waits = crowd_waits(
-        graph, [report("Hive_B5_015", kind="edge") for _ in range(4)], NOW
+        graph, [report("Hive_Lift_A", kind="edge") for _ in range(4)], NOW
     )
     cost = with_crowding(edge_seconds, waits)
 
@@ -229,7 +230,7 @@ def client(tmp_path: Path) -> Iterator[TestClient]:
 
 def route_nodes(client: TestClient) -> list[str]:
     return client.post(
-        "/route", json={"origin": "Hive_B5_A", "destination": "Hive_B5_C"}
+        "/route", json={"origin": "Hive_B5_A", "destination": "Hive_B5_I"}
     ).json()["nodes"]
 
 

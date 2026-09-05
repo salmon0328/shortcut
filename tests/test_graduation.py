@@ -283,7 +283,7 @@ def test_pending_names_places_readably(surveyed: dict) -> None:
     body = surveyed["client"].get("/admin/pending").json()
     by_id = {c["id"]: c for c in body["changes"]}
 
-    assert by_id["Hive_B5_002"]["label"] == "Staircase 1 → Courtyard"
+    assert by_id["Hive_B5_002"]["label"] == "Lift Lobby → Courtyard"
 
 
 def test_pending_is_empty_when_nothing_has_changed(workspace: dict) -> None:

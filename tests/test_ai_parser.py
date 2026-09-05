@@ -20,7 +20,7 @@ from shortcut.ai.schemas import ParsedIntent
 from shortcut.graph_store import CampusGraph
 from shortcut.schemas import RouteRequest
 
-ENTRANCE = "Hive_B5_D"
+ENTRANCE = "Hive_B5_I"
 COURTYARD = "Hive_B5_G"
 
 

@@ -60,19 +60,20 @@ PLACE_ALIASES: dict[str, str] = {
     "the lockers": "Hive_B5_F",
     "parcel lockers": "Hive_B5_F",
     "pickup lockers": "Hive_B5_F",
-    "entrance": "Hive_B5_D",
-    "the entrance": "Hive_B5_D",
-    "main door": "Hive_B5_D",
-    "front door": "Hive_B5_D",
-    "main entrance": "Hive_B5_D",
-    "lift": "Hive_B5_B",
-    "the lift": "Hive_B5_B",
-    "elevator": "Hive_B5_B",
-    "lift lobby": "Hive_B5_H",
-    "elevator lobby": "Hive_B5_H",
-    "main stairs": "Hive_B5_I",
-    "main staircase": "Hive_B5_I",
+    "entrance": "Hive_B5_I",
+    "the entrance": "Hive_B5_I",
+    "main door": "Hive_B5_I",
+    "front door": "Hive_B5_I",
+    "main entrance": "Hive_B5_I",
+    "the lift": "Hive_B5_A",
+    "elevator": "Hive_B5_A",
+    "elevator lobby": "Hive_B5_A",
 }
+
+# Deliberately absent: "lift", "lift lobby", "main staircase". Each of those
+# names a real place on B5 *and* on B4, so they are meant to come back
+# ambiguous. An alias would quietly pick the B5 one - exactly the guessing
+# this module exists to avoid.
 
 
 @dataclass(frozen=True)
