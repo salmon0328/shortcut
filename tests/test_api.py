@@ -184,9 +184,9 @@ def test_a_known_node_carries_its_real_name_and_building(
         "building": "Hive",
         "floor": "B5",
         "condition": None,
-        # Nothing has been surveyed onto a floorplan yet.
-        "x": None,
-        "y": None,
+        # Traced off the team's node map; see data/floorplan_sources/.
+        "x": 13.41,
+        "y": 53.81,
     }
     assert by_id[DESTINATION]["name"] == "Staircase 3"
     assert by_id[DESTINATION]["floor"] == "B5"

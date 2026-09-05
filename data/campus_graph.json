@@ -5,119 +5,153 @@
       "name": "Staircase 1",
       "building": "Hive",
       "floor": "B5",
-      "type": "stairs"
+      "type": "stairs",
+      "x": 13.41,
+      "y": 53.81
     },
     {
       "id": "Hive_B5_B",
       "name": "Lift",
       "building": "Hive",
       "floor": "B5",
-      "type": "lift"
+      "type": "lift",
+      "x": 17.63,
+      "y": 26.84
     },
     {
       "id": "Hive_B5_C",
       "name": "Staircase 3",
       "building": "Hive",
       "floor": "B5",
-      "type": "stairs"
+      "type": "stairs",
+      "x": 49.28,
+      "y": 22.0
     },
     {
       "id": "Hive_B5_D",
       "name": "Main Entrance",
       "building": "Hive",
       "floor": "B5",
-      "type": "junction"
+      "type": "junction",
+      "x": 48.65,
+      "y": 37.01
     },
     {
       "id": "Hive_B5_E",
       "name": "Staircase 2",
       "building": "Hive",
       "floor": "B5",
-      "type": "stairs"
+      "type": "stairs",
+      "x": 44.79,
+      "y": 43.75
     },
     {
       "id": "Hive_B5_F",
       "name": "Pick Lockers",
       "building": "Hive",
       "floor": "B5",
-      "type": "junction"
+      "type": "junction",
+      "x": 36.05,
+      "y": 17.11
     },
     {
       "id": "Hive_B5_G",
       "name": "Courtyard",
       "building": "Hive",
       "floor": "B5",
-      "type": "junction"
+      "type": "junction",
+      "x": 34.41,
+      "y": 31.41
     },
     {
       "id": "Hive_B5_H",
       "name": "Lift Lobby",
       "building": "Hive",
       "floor": "B5",
-      "type": "junction"
+      "type": "junction",
+      "x": 21.8,
+      "y": 26.03
     },
     {
       "id": "Hive_B5_I",
       "name": "Main Staircase",
       "building": "Hive",
       "floor": "B5",
-      "type": "stairs"
+      "type": "stairs",
+      "x": 23.05,
+      "y": 21.29
     },
     {
       "id": "Hive_B4_A",
       "name": "Staircase 1",
       "building": "Hive",
       "floor": "B4",
-      "type": "stairs"
+      "type": "stairs",
+      "x": 14.08,
+      "y": 52.81
     },
     {
       "id": "Hive_B4_B",
       "name": "Lift",
       "building": "Hive",
       "floor": "B4",
-      "type": "lift"
+      "type": "lift",
+      "x": 17.22,
+      "y": 26.12
     },
     {
       "id": "Hive_B4_C",
       "name": "Staircase 3",
       "building": "Hive",
       "floor": "B4",
-      "type": "stairs"
+      "type": "stairs",
+      "x": 45.7,
+      "y": 23.08
     },
     {
       "id": "Hive_B4_D",
       "name": "Staircase 2",
       "building": "Hive",
       "floor": "B4",
-      "type": "stairs"
+      "type": "stairs",
+      "x": 34.79,
+      "y": 42.11
     },
     {
       "id": "Hive_B4_E",
       "name": "Side Entrance",
       "building": "Hive",
       "floor": "B4",
-      "type": "junction"
+      "type": "junction",
+      "x": 30.44,
+      "y": 45.29
     },
     {
       "id": "Hive_B4_F",
       "name": "Back Entrance",
       "building": "Hive",
       "floor": "B4",
-      "type": "junction"
+      "type": "junction",
+      "x": 20.06,
+      "y": 50.65
     },
     {
       "id": "Hive_B4_G",
       "name": "Main Staircase",
       "building": "Hive",
       "floor": "B4",
-      "type": "stairs"
+      "type": "stairs",
+      "x": 24.41,
+      "y": 21.86
     },
     {
       "id": "Hive_B4_H",
       "name": "Lift Lobby",
       "building": "Hive",
       "floor": "B4",
-      "type": "junction"
+      "type": "junction",
+      "x": 22.95,
+      "y": 27.69
     }
   ],
   "edges": [

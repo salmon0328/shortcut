@@ -251,11 +251,12 @@ def test_fetching_a_plan_that_does_not_exist_is_a_404(client: TestClient) -> Non
 # --------------------------------------------------------------------------
 
 
-def test_places_start_without_coordinates(client: TestClient) -> None:
-    """Nothing has been surveyed onto a plan yet, and the API says so."""
+def test_every_surveyed_place_sits_somewhere_on_its_floor(client: TestClient) -> None:
+    """Both Hive floors have been traced onto a plan, so every place has a spot."""
     nodes = client.get("/nodes").json()
 
-    assert all(node["x"] is None and node["y"] is None for node in nodes)
+    assert nodes
+    assert all(node["x"] is not None and node["y"] is not None for node in nodes)
 
 
 def test_a_place_can_be_given_coordinates(client: TestClient) -> None:
