@@ -52,6 +52,19 @@ def test_values_are_set_and_reported(
     monkeypatch.delenv("DOTENV_TEST_B")
 
 
+def test_a_blank_value_is_left_unset(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``AWS_PROFILE=`` copied from the example must not become a profile named ""."""
+    monkeypatch.delenv("DOTENV_TEST_A", raising=False)
+    env = tmp_path / ".env"
+    env.write_text("DOTENV_TEST_A=\nDOTENV_TEST_B=''\n", encoding="utf-8")
+
+    assert load_dotenv(env) == []
+    assert "DOTENV_TEST_A" not in os.environ
+    assert "DOTENV_TEST_B" not in os.environ
+
+
 def test_the_real_environment_wins(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
