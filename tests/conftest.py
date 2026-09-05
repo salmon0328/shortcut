@@ -23,6 +23,24 @@ if str(SRC_DIR) not in sys.path:
 from shortcut.graph_store import CampusGraph, load_graph  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def stay_on_local_disk(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Keep every test away from S3, whatever the developer's own setup says.
+
+    The photo and floorplan stores switch to a shared bucket when
+    ``SHORTCUT_S3_BUCKET`` is set, and the server now reads ``.env`` at
+    startup. Without this, a developer who keeps the bucket in their shell or
+    their ``.env`` would have the suite writing test uploads into the shared
+    bucket. So the variable is cleared, and the app is pointed at a ``.env``
+    that does not exist.
+    """
+    monkeypatch.delenv("SHORTCUT_S3_BUCKET", raising=False)
+
+    import shortcut.api as api  # noqa: PLC0415 - after sys.path is set up
+
+    monkeypatch.setattr(api, "DOTENV_PATH", tmp_path / "no-such.env")
+
+
 @pytest.fixture(scope="session")
 def graph_path() -> Path:
     """Path to the real, hand-made campus graph."""
