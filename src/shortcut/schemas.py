@@ -462,6 +462,16 @@ class RouteResponse(BaseModel):
         ``find_photo`` is passed in rather than looked up here, so this module
         stays free of photo storage. It is called with the target kind, the
         target id and the node being walked towards, and returns a URL or None.
+
+        Two places are tried for each step's picture, in this order:
+
+        * the link itself, facing the way it goes - a photo *of* the corridor
+        * the place being left, facing the same way - a photo taken *standing*
+          there, looking off down that corridor
+
+        The second is how the building actually gets surveyed: you stand at a
+        junction and photograph each way out of it. Without that fallback,
+        every one of those photos would be collected and never shown.
         """
         steps: list[RouteStep] = []
         for index, edge_id in enumerate(route.edge_ids):
@@ -470,7 +480,10 @@ class RouteResponse(BaseModel):
             to_node = graph.nodes[route.node_ids[index + 1]]
             text = step_text(edge, from_node, to_node)
             photo_url = (
-                find_photo("edge", edge.id, to_node.id) if find_photo else None
+                find_photo("edge", edge.id, to_node.id)
+                or find_photo("node", from_node.id, to_node.id)
+                if find_photo
+                else None
             )
 
             steps.append(
