@@ -1,5 +1,5 @@
-// Shortcut frontend: loads the map data, then wires the three screens
-// together. The screens themselves live in plan.js, report.js and admin.js.
+// Shortcut frontend: loads the map data, then wires the screens together.
+// The screens themselves live in plan.js, report.js and admin.js.
 //
 // No AI, no map drawing, no libraries. Everything shown here comes from the
 // backend, which in turn reads data/campus_graph.json.
@@ -13,25 +13,36 @@ import { refreshPending } from "./pending.js";
 import { currentStep, showPlanError, showPlanLoading, stopPlanLoading } from "./plan.js";
 import { prefillFromStep, resetForm } from "./report.js";
 
+// One screen per section, in the order the wireframe walks them: splash,
+// plan, steps, report; admin sits off to the side behind its switch.
 const views = {
+  splash: document.querySelector("#splash-view"),
   plan: document.querySelector("#plan-view"),
+  steps: document.querySelector("#steps-view"),
   report: document.querySelector("#report-view"),
   admin: document.querySelector("#admin-view"),
 };
 
+const startButton = document.querySelector("#start-button");
+const startWalkingButton = document.querySelector("#start-walking");
 const adminToggle = document.querySelector("#admin-toggle");
-const reportProblemButton = document.querySelector("#report-problem-button");
+const reportProblemButtons = document.querySelectorAll("[data-report-problem]");
 
 /** Show one screen and hide the rest. */
 function showView(name) {
   for (const [key, element] of Object.entries(views)) {
     element.hidden = key !== name;
   }
+  window.scrollTo(0, 0);
 }
 
 // --------------------------------------------------------------------------
 // Moving between screens
 // --------------------------------------------------------------------------
+
+startButton.addEventListener("click", () => showView("plan"));
+
+startWalkingButton.addEventListener("click", () => showView("steps"));
 
 for (const button of document.querySelectorAll("[data-back-to-plan]")) {
   button.addEventListener("click", () => {
@@ -40,17 +51,22 @@ for (const button of document.querySelectorAll("[data-back-to-plan]")) {
   });
 }
 
-reportProblemButton.addEventListener("click", () => {
-  const step = currentStep();
-  // Reporting from a step already knows which corridor is meant, so the form
-  // opens pointed at it rather than making the user find it again.
-  if (step) {
-    prefillFromStep(step);
-  } else {
-    resetForm();
-  }
-  showView("report");
-});
+// One on the plan screen, one on the steps screen. Both open the same form;
+// only whether it comes pre-filled differs.
+for (const button of reportProblemButtons) {
+  button.addEventListener("click", () => {
+    const step = button.closest("#steps-view") ? currentStep() : null;
+    // Reporting from a step already knows which corridor is meant, so the
+    // form opens pointed at it rather than making the user find it again.
+    // From the plan screen nothing is being walked, so it opens blank.
+    if (step) {
+      prefillFromStep(step);
+    } else {
+      resetForm();
+    }
+    showView("report");
+  });
+}
 
 // Admin mode is only a switch in this browser. It does not protect anything:
 // the review endpoints are open, which is fine while this runs locally and is
@@ -65,7 +81,7 @@ adminToggle.addEventListener("change", () => {
 });
 
 // --------------------------------------------------------------------------
-// The two halves of admin mode
+// The panels of admin mode
 // --------------------------------------------------------------------------
 
 const adminTabs = {
@@ -103,16 +119,18 @@ for (const button of document.querySelectorAll(".tab")) {
 // --------------------------------------------------------------------------
 
 async function start() {
+  // Loads behind the splash screen, so by the time someone taps through the
+  // place lists are ready.
   showPlanLoading("Loading locations…");
   try {
     await loadReferenceData();
     stopPlanLoading();
   } catch (error) {
-    // Leave the Find button disabled: with no places there is nothing to
-    // route between, so re-enabling it would only produce a second error.
+    // Leave the Get route button disabled: with no places there is nothing
+    // to route between, so re-enabling it would only produce a second error.
     showPlanError(error.message);
   }
 }
 
-showView("plan");
+showView("splash");
 start();

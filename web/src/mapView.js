@@ -244,10 +244,7 @@ export function showRouteOnMap(route) {
 export function showEmptyMap() {
   currentRoute = null;
   floorTabs.hidden = true;
-  showMessage(
-    "Your route will appear here",
-    "Pick a start and a destination to see it drawn on the floorplan."
-  );
+  showMessage("Your route will appear here", null);
 }
 
 export { panel as mapPanel };

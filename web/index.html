@@ -3,186 +3,211 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#1d2bb5" />
     <title>Shortcut</title>
   </head>
   <body>
-    <main class="page">
-      <header class="page-header">
-        <div>
-          <h1>Shortcut</h1>
-          <p class="description">
-            Find the quickest walking route between two points inside the Hive.
-          </p>
+    <!-- One phone-shaped column. Each <section class="screen"> is a screen
+         from the wireframe; main.js shows one at a time. -->
+    <main class="app">
+      <!-- =========================== SPLASH =========================== -->
+      <section id="splash-view" class="screen splash">
+        <div class="splash-body">
+          <div class="logo" aria-hidden="true">S</div>
+          <h1 class="splash-title">ShortCut</h1>
+          <p class="tagline">The routes students know.</p>
         </div>
-
-        <!-- No accounts yet: this only changes what this browser shows. The
-             review endpoints themselves are not protected. -->
-        <label class="admin-switch">
-          <input type="checkbox" id="admin-toggle" />
-          <span>Admin mode</span>
-        </label>
-      </header>
+        <button type="button" id="start-button" class="primary">
+          Help me navigate!
+        </button>
+      </section>
 
       <!-- ============================ PLAN ============================ -->
-      <!-- On a phone this stacks: map on top, controls below. On a wider
-           screen the controls become a side panel and the map fills the rest,
-           which is the same arrangement but laid out sideways. -->
-      <section id="plan-view" class="layout">
+      <!-- A map fills the top of the screen and a sheet slides up over it
+           with the controls. Once a route is found, the sheet also carries
+           the summary and the way into the step-by-step screen. -->
+      <section id="plan-view" class="screen plan" hidden>
         <div class="map-panel" id="map-panel">
-          <div class="map-floors" id="map-floors" hidden></div>
           <div class="map-canvas" id="map-canvas"></div>
+          <div class="map-floors" id="map-floors" hidden></div>
         </div>
 
-        <div class="control-panel">
-        <form id="route-form" class="card" autocomplete="off">
-          <div class="field">
-            <label for="origin-input">I am at…</label>
-            <div class="combobox">
-              <input
-                type="text"
-                id="origin-input"
-                placeholder="Search for a place"
-                role="combobox"
-                aria-expanded="false"
-                aria-controls="origin-suggestions"
-                aria-autocomplete="list"
-              />
-              <ul id="origin-suggestions" class="suggestions" role="listbox" hidden></ul>
+        <div class="topbar">
+          <span class="wordmark">Shortcut</span>
+          <!-- No accounts yet: this only changes what this browser shows. The
+               review endpoints themselves are not protected. -->
+          <label class="admin-switch">
+            <input type="checkbox" id="admin-toggle" />
+            <span>Admin</span>
+          </label>
+        </div>
+
+        <div class="sheet">
+          <div class="sheet-handle" aria-hidden="true"></div>
+
+          <form id="route-form" autocomplete="off">
+            <div class="field">
+              <label for="origin-input">I am at…</label>
+              <div class="combobox">
+                <input
+                  type="text"
+                  id="origin-input"
+                  placeholder="Search for a place"
+                  role="combobox"
+                  aria-expanded="false"
+                  aria-controls="origin-suggestions"
+                  aria-autocomplete="list"
+                />
+                <button type="button" class="clear-button" data-clear aria-label="Clear" hidden>
+                  ×
+                </button>
+                <ul id="origin-suggestions" class="suggestions" role="listbox" hidden></ul>
+              </div>
             </div>
-          </div>
 
-          <div class="field">
-            <label for="destination-input">I need to get to…</label>
-            <div class="combobox">
-              <input
-                type="text"
-                id="destination-input"
-                placeholder="Search for a place"
-                role="combobox"
-                aria-expanded="false"
-                aria-controls="destination-suggestions"
-                aria-autocomplete="list"
-              />
-              <ul
-                id="destination-suggestions"
-                class="suggestions"
-                role="listbox"
-                hidden
-              ></ul>
+            <div class="field">
+              <label for="destination-input">I need to get to…</label>
+              <div class="combobox">
+                <input
+                  type="text"
+                  id="destination-input"
+                  placeholder="Search for a place"
+                  role="combobox"
+                  aria-expanded="false"
+                  aria-controls="destination-suggestions"
+                  aria-autocomplete="list"
+                />
+                <button type="button" class="clear-button" data-clear aria-label="Clear" hidden>
+                  ×
+                </button>
+                <ul
+                  id="destination-suggestions"
+                  class="suggestions"
+                  role="listbox"
+                  hidden
+                ></ul>
+              </div>
             </div>
-          </div>
 
-          <fieldset class="options">
-            <legend>Route preference</legend>
+            <!-- Radios styled as chips. The value is what the backend calls
+                 each preference; the label is what a student would say. -->
+            <fieldset class="chips">
+              <legend>Prefer</legend>
+              <label class="chip">
+                <input type="radio" name="preference" value="fastest" checked />
+                <span>Fastest</span>
+              </label>
+              <label class="chip">
+                <input type="radio" name="preference" value="sheltered" />
+                <span>Sheltered</span>
+              </label>
+              <label class="chip">
+                <input type="radio" name="preference" value="prefer_lift" />
+                <span>Lift</span>
+              </label>
+              <label class="chip">
+                <input type="radio" name="preference" value="least_walking" />
+                <span>Shuttle</span>
+              </label>
+            </fieldset>
 
-            <label class="choice">
-              <input type="radio" name="preference" value="fastest" checked />
-              <span>
-                Fastest
-                <small>Whichever gets you there soonest</small>
-              </span>
-            </label>
+            <details class="more-options">
+              <summary>More options</summary>
+              <label class="choice">
+                <input type="checkbox" id="allow-stairs" checked />
+                <span>Stairs allowed</span>
+              </label>
+              <label class="choice">
+                <input type="checkbox" id="allow-lift" checked />
+                <span>Lifts allowed</span>
+              </label>
+              <label class="choice">
+                <input type="checkbox" id="allow-shuttle" checked />
+                <span>Shuttles allowed</span>
+              </label>
+              <label class="choice">
+                <input type="checkbox" id="sheltered-only" />
+                <span>Sheltered corridors only</span>
+              </label>
+            </details>
 
-            <label class="choice">
-              <input type="radio" name="preference" value="prefer_lift" />
-              <span>
-                Less climbing
-                <small>Takes the lift where there is one</small>
-              </span>
-            </label>
+            <button type="submit" id="find-button" class="primary">Get route</button>
+          </form>
 
-            <label class="choice">
-              <input type="radio" name="preference" value="least_walking" />
-              <span>
-                Less walking
-                <small>Rides the shuttle rather than walking far</small>
-              </span>
-            </label>
-          </fieldset>
+          <p id="loading" class="status loading" hidden>Finding the best route…</p>
+          <p id="error" class="status error" hidden></p>
 
-          <fieldset class="options">
-            <legend>Only use</legend>
-
-            <label class="choice">
-              <input type="checkbox" id="allow-stairs" checked />
-              <span>Stairs allowed</span>
-            </label>
-
-            <label class="choice">
-              <input type="checkbox" id="allow-lift" checked />
-              <span>Lifts allowed</span>
-            </label>
-
-            <label class="choice">
-              <input type="checkbox" id="allow-shuttle" checked />
-              <span>Shuttles allowed</span>
-            </label>
-
-            <label class="choice">
-              <input type="checkbox" id="sheltered-only" />
-              <span>Sheltered corridors only</span>
-            </label>
-          </fieldset>
-
-          <button type="submit" id="find-button">Find route</button>
-        </form>
-
-        <p id="loading" class="status loading" hidden>Finding the best route…</p>
-        <p id="error" class="status error" hidden></p>
-
-        <section id="result" class="card result" hidden>
-          <h2>Your route</h2>
-
-          <dl class="totals">
-            <div>
-              <dt>Time</dt>
-              <dd id="total-time">—</dd>
+          <section id="result" class="summary" hidden>
+            <div class="summary-head">
+              <span id="total-time" class="summary-time">—</span>
+              <span id="summary-line" class="summary-line"></span>
             </div>
-            <div>
-              <dt>Walking</dt>
-              <dd id="total-distance">—</dd>
-            </div>
-          </dl>
 
-          <p id="total-extra" class="total-extra"></p>
+            <ol class="summary-route">
+              <li class="summary-stop from"><span id="summary-from"></span></li>
+              <li class="summary-stop to"><span id="summary-to"></span></li>
+            </ol>
 
-          <ul class="badges">
-            <li id="badge-stairs"></li>
-            <li id="badge-lift"></li>
-            <li id="badge-shuttle"></li>
-            <li id="badge-shelter"></li>
-          </ul>
+            <p id="total-extra" class="total-extra" hidden></p>
 
-          <button type="button" id="show-options" class="secondary">
-            View other routes
-          </button>
-          <div id="route-options" class="route-options" hidden></div>
+            <ul class="badges">
+              <li id="badge-stairs"></li>
+              <li id="badge-lift"></li>
+              <li id="badge-shuttle"></li>
+              <li id="badge-shelter"></li>
+            </ul>
 
-          <h3>Steps</h3>
-          <p id="step-progress" class="step-progress"></p>
-          <ol id="route-steps" class="steps"></ol>
+            <button type="button" id="start-walking" class="primary success">
+              Start walking
+            </button>
+            <button type="button" id="show-options" class="secondary">
+              View others
+            </button>
+            <div id="route-options" class="route-options" hidden></div>
+          </section>
 
-          <div class="step-controls">
-            <button type="button" id="back-button" class="secondary">Back</button>
-            <button type="button" id="next-button">Next step</button>
-          </div>
-
-          <button type="button" id="report-problem-button" class="danger-outline">
+          <!-- Reachable without a route too: a blocked corridor is worth
+               reporting whether or not you were about to walk it. -->
+          <button type="button" class="danger-outline sheet-report" data-report-problem>
             Report a problem
           </button>
-        </section>
+        </div>
+      </section>
+
+      <!-- =========================== STEPS ============================ -->
+      <section id="steps-view" class="screen" hidden>
+        <header class="screen-head">
+          <button type="button" class="link-button" data-back-to-plan>← Route</button>
+          <h2 id="arrival-time">— to arrival</h2>
+          <p id="step-progress" class="step-progress"></p>
+        </header>
+
+        <ol id="route-steps" class="steps"></ol>
+
+        <!-- Lives inside the current step's card while walking; plan.js moves
+             it there. It starts here so it always has a home in the DOM. -->
+        <button type="button" id="back-button" class="secondary small" hidden>
+          Back
+        </button>
+
+        <div class="steps-actions">
+          <button type="button" id="next-button" class="primary success">
+            I'm here, next step
+          </button>
+          <button type="button" class="danger-outline" data-report-problem>
+            Report a problem
+          </button>
         </div>
       </section>
 
       <!-- =========================== REPORT =========================== -->
-      <section id="report-view" hidden>
-        <button type="button" class="link-button" data-back-to-plan>
-          ← Back to route
-        </button>
-
-        <form id="report-form" class="card" autocomplete="off">
+      <section id="report-view" class="screen" hidden>
+        <header class="screen-head">
+          <button type="button" class="link-button" data-back-to-plan>← Back</button>
           <h2>What's happening here?</h2>
+        </header>
 
+        <form id="report-form" autocomplete="off">
           <div class="field">
             <label for="report-place-input">Location</label>
             <div class="combobox">
@@ -213,7 +238,19 @@
             <select id="report-where"></select>
           </div>
 
-          <fieldset class="options">
+          <!-- Reports do not carry photos yet: the backend has no way to
+               attach one to a report. The box is here so the layout matches
+               the design and the space is ready. -->
+          <div class="photo-box" aria-hidden="true">
+            <svg class="photo-box-icon" viewBox="0 0 24 24" width="40" height="40">
+              <rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.6" />
+              <circle cx="8.5" cy="10" r="1.6" fill="currentColor" />
+              <path d="M5 17l4.5-4.5 3 3 2.5-2.5L19 17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
+            </svg>
+            <span>Photo upload coming soon</span>
+          </div>
+
+          <fieldset class="chips condition-chips">
             <legend>Condition</legend>
             <div class="condition-grid" id="condition-grid">
               <label class="condition">
@@ -241,12 +278,8 @@
               id="report-notes"
               rows="3"
               maxlength="500"
-              placeholder="Anything else worth knowing — exactly where, how bad, how long."
+              placeholder="Description"
             ></textarea>
-          </div>
-
-          <div class="photo-placeholder">
-            <span>Photo upload is not built yet</span>
           </div>
 
           <button type="submit" id="report-submit" class="danger">Submit</button>
@@ -256,10 +289,14 @@
       </section>
 
       <!-- ============================ ADMIN =========================== -->
-      <section id="admin-view" hidden>
-        <button type="button" class="link-button" data-back-to-plan>
-          ← Back to route
-        </button>
+      <section id="admin-view" class="screen" hidden>
+        <header class="screen-head">
+          <button type="button" class="link-button" data-back-to-plan>← Back</button>
+          <h2>
+            Pending reports
+            <span id="pending-count" class="count-pill">0</span>
+          </h2>
+        </header>
 
         <!-- One panel at a time: adding a place and editing one are separate
              jobs, and showing both at once only makes each harder to read. -->
@@ -275,16 +312,12 @@
 
         <!-- ---------------------- reports tab ---------------------- -->
         <div id="admin-tab-reports">
-          <div class="card">
-            <h2>
-              Pending reports
-              <span id="pending-count" class="count-pill">0</span>
-            </h2>
+          <div class="queue-head">
             <p class="hint">
-              Reports are grouped by the problem they describe. Approving applies
-              it to the map for everyone.
+              Grouped by the problem described. Approving applies it to the map
+              for everyone.
             </p>
-            <button type="button" id="refresh-queue" class="secondary">
+            <button type="button" id="refresh-queue" class="secondary small">
               Refresh
             </button>
           </div>
@@ -298,7 +331,7 @@
         <!-- --------------------- add a place ---------------------- -->
         <div id="admin-tab-add-place" hidden>
           <form id="add-node-form" class="card" autocomplete="off">
-            <h2>Add a place</h2>
+            <h3>Add a place</h3>
             <p class="hint">
               Saved as a change on top of the surveyed map, never into
               <code>campus_graph.json</code>.
@@ -363,14 +396,14 @@
               <div id="new-node-photo-queue" class="photo-queue"></div>
             </fieldset>
 
-            <button type="submit" id="add-node-submit">Add place</button>
+            <button type="submit" id="add-node-submit" class="primary">Add place</button>
           </form>
         </div>
 
         <!-- ---------------------- add a link ---------------------- -->
         <div id="admin-tab-add-link" hidden>
           <form id="add-edge-form" class="card" autocomplete="off">
-            <h2>Add a link</h2>
+            <h3>Add a link</h3>
             <p class="hint">
               Joins two places that already exist, one link at a time.
             </p>
@@ -463,14 +496,14 @@
               />
             </div>
 
-            <button type="submit" id="add-edge-submit">Add link</button>
+            <button type="submit" id="add-edge-submit" class="primary">Add link</button>
           </form>
         </div>
 
         <!-- ------------------------- edit ------------------------- -->
         <div id="admin-tab-edit" hidden>
           <div class="card">
-            <h2>Edit a place or link</h2>
+            <h3>Edit a place or link</h3>
 
             <div class="field">
               <label for="inspect-place-input">Pick a place</label>
@@ -500,7 +533,7 @@
 
             <div id="inspect-panel" hidden>
               <div id="inspect-fields"></div>
-              <button type="button" id="inspect-save">Save changes</button>
+              <button type="button" id="inspect-save" class="primary">Save changes</button>
               <button type="button" id="inspect-delete" class="danger-outline" hidden>
                 Remove this addition
               </button>
@@ -534,17 +567,17 @@
         <!-- ----------------------- pending ------------------------ -->
         <div id="admin-tab-pending" hidden>
           <div class="card">
-            <h2>
+            <h3>
               Not yet in the survey
               <span id="pending-count-map" class="count-pill">0</span>
-            </h2>
+            </h3>
             <p class="hint">
               Everything changed since <code>campus_graph.json</code> was last
               updated. Surveyed work belongs in that file, where it is version
               controlled; conditions from reports stay here, because they
               describe now rather than the building.
             </p>
-            <button type="button" id="refresh-pending" class="secondary">
+            <button type="button" id="refresh-pending" class="secondary small">
               Refresh
             </button>
           </div>

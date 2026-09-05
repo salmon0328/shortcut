@@ -4,7 +4,7 @@
 // several people's confirmations. Approving a row applies it to the map for
 // everyone; rejecting leaves the map exactly as surveyed.
 
-import { fetchReportGroups, reviewReportGroup } from "./api.js";
+import { fetchPhotos, fetchReportGroups, photoUrl, reviewReportGroup } from "./api.js";
 
 const queue = document.querySelector("#report-queue");
 const pendingCount = document.querySelector("#pending-count");
@@ -26,13 +26,54 @@ function makeButton(label, className, onClick) {
   return button;
 }
 
+/**
+ * A picture of the place, if the map has one.
+ *
+ * Reports do not carry their own photos yet, so the queue shows whatever
+ * has already been photographed at that spot: enough for an admin to
+ * recognise where a report is about. Starts as a placeholder and swaps in
+ * the image once it is known to exist, so the card never waits on it.
+ */
+function thumbnailFor(group) {
+  const empty = document.createElement("div");
+  empty.className = "report-thumb-empty";
+  empty.setAttribute("aria-hidden", "true");
+  empty.innerHTML =
+    '<svg viewBox="0 0 24 24" width="28" height="28">' +
+    '<rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/>' +
+    '<circle cx="8.5" cy="10" r="1.6" fill="currentColor"/>' +
+    '<path d="M5 17l4.5-4.5 3 3 2.5-2.5L19 17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>' +
+    "</svg>";
+
+  fetchPhotos(group.target_kind, group.target_id)
+    .then((photos) => {
+      if (!Array.isArray(photos) || photos.length === 0) return;
+      const image = document.createElement("img");
+      image.className = "report-thumb";
+      image.src = photoUrl(photos[0].url);
+      image.alt = group.target_name;
+      image.loading = "lazy";
+      empty.replaceWith(image);
+    })
+    .catch(() => {
+      // No photo is not an error worth reporting; the placeholder stays.
+    });
+
+  return empty;
+}
+
 function renderGroup(group) {
   const card = document.createElement("article");
   card.className = "card report-card";
 
+  card.appendChild(thumbnailFor(group));
+
+  const body = document.createElement("div");
+  body.className = "report-body";
+
   const heading = document.createElement("h3");
   heading.textContent = group.target_name;
-  card.appendChild(heading);
+  body.appendChild(heading);
 
   const tags = document.createElement("p");
   tags.className = "report-tags";
@@ -46,12 +87,10 @@ function renderGroup(group) {
   // add a warning, before they say it.
   const effect = document.createElement("span");
   effect.className = "effect-tag";
-  effect.textContent = group.blocks_routes
-    ? "Approving closes this to routing"
-    : "Approving only adds a warning";
+  effect.textContent = group.blocks_routes ? "Closes to routing" : "Warning only";
   tags.appendChild(effect);
 
-  card.appendChild(tags);
+  body.appendChild(tags);
 
   const confirmations = document.createElement("p");
   confirmations.className = "report-confirmations";
@@ -59,7 +98,17 @@ function renderGroup(group) {
     group.confirmations === 1
       ? "1 report"
       : `${group.confirmations} confirmations`;
-  card.appendChild(confirmations);
+  body.appendChild(confirmations);
+
+  const actions = document.createElement("div");
+  actions.className = "report-actions";
+  actions.append(
+    makeButton("Approve", "approve", () => review(group.key, "approve")),
+    makeButton("Reject", "secondary", () => review(group.key, "reject"))
+  );
+  body.appendChild(actions);
+
+  card.appendChild(body);
 
   if (group.notes.length > 0) {
     const notes = document.createElement("ul");
@@ -71,14 +120,6 @@ function renderGroup(group) {
     }
     card.appendChild(notes);
   }
-
-  const actions = document.createElement("div");
-  actions.className = "report-actions";
-  actions.append(
-    makeButton("Approve", "approve", () => review(group.key, "approve")),
-    makeButton("Reject", "secondary", () => review(group.key, "reject"))
-  );
-  card.appendChild(actions);
 
   return card;
 }
