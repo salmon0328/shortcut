@@ -25,3 +25,6 @@ data/reports.json
 data/graph_overrides.json
 data/photos/
 data/floorplans/
+
+# Handover notes, shared by hand rather than committed.
+HANDOVER.md
