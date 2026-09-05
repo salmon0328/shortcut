@@ -41,6 +41,7 @@ const stepsList = document.querySelector("#route-steps");
 const stepProgress = document.querySelector("#step-progress");
 const backButton = document.querySelector("#back-button");
 const nextButton = document.querySelector("#next-button");
+const finishButton = document.querySelector("#finish-button");
 
 const originBox = createSearchBox(
   document.querySelector("#origin-input"),
@@ -232,9 +233,30 @@ function renderSteps() {
     : `Step ${currentStepIndex + 1} of ${currentSteps.length}`;
 
   backButton.disabled = currentStepIndex === 0;
-  nextButton.disabled = arrived;
   nextButton.textContent =
     currentStepIndex === currentSteps.length - 1 ? "I'm here" : "I'm here, next step";
+
+  // Once there, "next step" has nothing left to do, so its place goes to
+  // the way out.
+  nextButton.hidden = arrived;
+  finishButton.hidden = !arrived;
+}
+
+/** Forget the route and the places, back to the blank plan screen. */
+export function resetPlan() {
+  originBox.clear();
+  destinationBox.clear();
+  currentSteps = [];
+  currentStepIndex = 0;
+  lastRequest = null;
+  optionsList.replaceChildren();
+  optionsList.hidden = true;
+  showOptionsButton.textContent = "View others";
+  stepsList.replaceChildren();
+  nextButton.hidden = false;
+  finishButton.hidden = true;
+  clearOutput();
+  showEmptyMap();
 }
 
 function showRoute(route) {
@@ -284,7 +306,8 @@ function showRoute(route) {
     arrivalTime.textContent = "You are already there";
     stepProgress.textContent = "";
     backButton.hidden = true;
-    nextButton.disabled = true;
+    nextButton.hidden = true;
+    finishButton.hidden = false;
   } else {
     renderSteps();
   }

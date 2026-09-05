@@ -7,7 +7,10 @@
 
 import { getNodes } from "./data.js";
 
-// Enough to scan without scrolling.
+// Enough to scan without scrolling, once something has been typed. With the
+// box still empty there is nothing to rank by, so the cap would only ever
+// keep whichever floor happens to come first in the graph file: an empty
+// box shows every place instead, and the list scrolls.
 const MAX_SUGGESTIONS = 8;
 
 /** How well a place matches what has been typed. Higher is better, -1 is no match. */
@@ -36,7 +39,7 @@ function suggestionsFor(query, prefer) {
     })
     .filter((entry) => entry.score >= 0)
     .sort((a, b) => b.score - a.score) // sort is stable, so ties keep graph order
-    .slice(0, MAX_SUGGESTIONS)
+    .slice(0, cleaned ? MAX_SUGGESTIONS : Infinity)
     .map((entry) => entry.node);
 }
 

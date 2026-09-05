@@ -625,6 +625,11 @@ textarea:focus-visible {
   gap: 0.25rem;
 }
 
+/* display: flex above would otherwise win over the hidden attribute. */
+.map-floors[hidden] {
+  display: none;
+}
+
 .floor-tab {
   width: auto;
   padding: 0.3rem 0.75rem;

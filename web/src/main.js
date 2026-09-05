@@ -10,7 +10,13 @@ import { refreshQueue } from "./admin.js";
 import { refreshMapEditor } from "./adminMap.js";
 import { loadReferenceData } from "./data.js";
 import { refreshPending } from "./pending.js";
-import { currentStep, showPlanError, showPlanLoading, stopPlanLoading } from "./plan.js";
+import {
+  currentStep,
+  resetPlan,
+  showPlanError,
+  showPlanLoading,
+  stopPlanLoading,
+} from "./plan.js";
 import { prefillFromStep, resetForm } from "./report.js";
 
 // One screen per section, in the order the wireframe walks them: splash,
@@ -25,6 +31,7 @@ const views = {
 
 const startButton = document.querySelector("#start-button");
 const startWalkingButton = document.querySelector("#start-walking");
+const finishButton = document.querySelector("#finish-button");
 const adminToggle = document.querySelector("#admin-toggle");
 const reportProblemButtons = document.querySelectorAll("[data-report-problem]");
 
@@ -43,6 +50,13 @@ function showView(name) {
 startButton.addEventListener("click", () => showView("plan"));
 
 startWalkingButton.addEventListener("click", () => showView("steps"));
+
+// Arrived: wipe the route and the place boxes, so the next journey starts
+// from a clean screen rather than the last one's answer.
+finishButton.addEventListener("click", () => {
+  resetPlan();
+  showView("plan");
+});
 
 for (const button of document.querySelectorAll("[data-back-to-plan]")) {
   button.addEventListener("click", () => {
