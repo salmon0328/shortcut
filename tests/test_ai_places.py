@@ -78,8 +78,8 @@ def test_a_lift_on_each_floor_is_asked_about_rather_than_guessed(
 
     assert resolution.resolved is None
     assert {match.node_id for match in resolution.alternatives} == {
-        "Hive_B5_B",
-        "Hive_B4_B",
+        "Hive_B5_A",
+        "Hive_B4_A",
     }
 
 
@@ -91,7 +91,7 @@ def test_an_alias_still_separates_the_lift_from_the_lift_lobby(
     Which is what makes aliases worth having: they name a specific place even
     where the surveyed names collide.
     """
-    assert resolve_place(graph, "the lift").resolved.node_id == "Hive_B5_B"
+    assert resolve_place(graph, "the lift").resolved.node_id == "Hive_B5_A"
 
 
 def test_every_alias_points_at_a_real_place(graph: CampusGraph) -> None:
@@ -136,8 +136,8 @@ def test_two_places_of_the_same_name_are_not_guessed_between(
     assert resolution.resolved is None
     assert resolution.ambiguous is True
     assert {match.node_id for match in resolution.alternatives} == {
-        "Hive_B5_A",
-        "Hive_B4_A",
+        "Hive_B5_C",
+        "Hive_B4_C",
     }
 
 
@@ -156,7 +156,7 @@ def test_a_resolved_phrase_asks_nothing(graph: CampusGraph) -> None:
 
 def test_the_floor_is_what_separates_the_two_staircases(graph: CampusGraph) -> None:
     """Naming the floor is enough to disambiguate, which is what the UI offers."""
-    assert resolve_place(graph, "Hive_B4_A").resolved.floor == "B4"
+    assert resolve_place(graph, "Hive_B4_C").resolved.floor == "B4"
 
 
 # --------------------------------------------------------------------------

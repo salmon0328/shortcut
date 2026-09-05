@@ -16,7 +16,7 @@ from fastapi.testclient import TestClient
 from shortcut.api import app, get_reports
 from shortcut.report_store import ReportStore
 
-# A corridor on the quickest Hive_B5_A -> Hive_B5_C route, so blocking it has
+# A corridor on the quickest Hive_B5_A -> Hive_B5_I route, so blocking it has
 # a visible effect on routing.
 REPORTED_EDGE = "Hive_B5_002"
 BLOCKED_KEY = f"blocked:{REPORTED_EDGE}"
@@ -64,7 +64,7 @@ def submit(client: TestClient, **overrides):
 
 def route_edges(client: TestClient) -> list[str]:
     response = client.post(
-        "/route", json={"origin": "Hive_B5_A", "destination": "Hive_B5_C"}
+        "/route", json={"origin": "Hive_B5_A", "destination": "Hive_B5_I"}
     )
     return response.json()["edges"]
 
@@ -246,7 +246,7 @@ def test_the_review_queue_names_the_place_readably(client: TestClient) -> None:
 
     group = client.get("/reports/groups").json()[0]
 
-    assert group["target_name"] == "Staircase 1 → Courtyard"
+    assert group["target_name"] == "Lift Lobby → Courtyard"
     assert group["confirmations"] == 1
 
 

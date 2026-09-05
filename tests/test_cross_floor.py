@@ -28,7 +28,7 @@ from shortcut.tools.astar import (
     prefer_lift_cost,
 )
 
-ON_B5 = "Hive_B5_D"  # Main Entrance
+ON_B5 = "Hive_B5_D"  # Staircase 2
 ON_B4 = "Hive_B4_D"  # Staircase 2, one floor down
 
 
@@ -70,7 +70,7 @@ def test_every_place_on_b4_can_be_reached_from_every_place_on_b5(
 
 def test_both_floors_are_actually_in_the_survey(graph: CampusGraph) -> None:
     assert len(_floor(graph, "B5")) == 9
-    assert len(_floor(graph, "B4")) == 8
+    assert len(_floor(graph, "B4")) == 7
 
 
 # --------------------------------------------------------------------------
@@ -158,7 +158,7 @@ def test_refusing_both_stairs_and_lift_cannot_change_floor(
 def test_asking_for_less_climbing_actually_takes_the_lift(
     graph: CampusGraph,
 ) -> None:
-    """The Hive's lift is 87 seconds dearer than the stairs beside it.
+    """The Hive's lift is 73 seconds dearer than the stairs beside it.
 
     Someone asking to avoid stairs often cannot use them at all, so the
     preference has to outweigh the detour rather than merely lean against it.
@@ -177,7 +177,7 @@ def test_a_packed_lift_does_not_send_a_step_free_route_up_the_stairs(
     A queue is a reason to warn them, never a reason to route them onto a
     staircase they may not be able to climb.
     """
-    packed = {"Hive_B5_015": CROWD_WAIT_CAP_SECONDS}
+    packed = {"Hive_Lift_A": CROWD_WAIT_CAP_SECONDS}
 
     route = find_route(
         graph, ON_B5, ON_B4, cost=with_crowding(prefer_lift_cost(), packed)
@@ -190,7 +190,7 @@ def test_a_packed_lift_does_send_someone_in_a_hurry_up_the_stairs(
     graph: CampusGraph,
 ) -> None:
     """The other half of the same rule: 'fastest' means fastest right now."""
-    packed = {"Hive_B5_015": CROWD_WAIT_CAP_SECONDS}
+    packed = {"Hive_Lift_A": CROWD_WAIT_CAP_SECONDS}
 
     route = find_route(graph, ON_B5, ON_B4, cost=with_crowding(edge_seconds, packed))
 

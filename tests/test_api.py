@@ -28,13 +28,13 @@ from shortcut.graph_store import CampusGraph, load_graph
 # The route under test, taken from the real graph. Both surveyed floors are
 # in it now, but this route stays on B5: crossing to B4 and back costs over a
 # minute, so no cross-floor edge can undercut it.
-#   Hive_B5_A --(Hive_B5_002)-> Hive_B5_G --(Hive_B5_007)-> Hive_B5_C
-ORIGIN = "Hive_B5_A"
-DESTINATION = "Hive_B5_C"
-EXPECTED_NODES = ["Hive_B5_A", "Hive_B5_G", "Hive_B5_C"]
-EXPECTED_EDGES = ["Hive_B5_002", "Hive_B5_007"]
-EXPECTED_SECONDS = 29.0  # 21 + 8
-EXPECTED_METRES = 40.6  # 29.4 + 11.2
+#   Staircase 1 --(006)-> Side Entrance --(008)-> Staircase 2 --(009)-> Main Entrance
+ORIGIN = "Hive_B5_C"
+DESTINATION = "Hive_B5_I"
+EXPECTED_NODES = ["Hive_B5_C", "Hive_B5_H", "Hive_B5_D", "Hive_B5_I"]
+EXPECTED_EDGES = ["Hive_B5_006", "Hive_B5_008", "Hive_B5_009"]
+EXPECTED_SECONDS = 31.0  # 17 + 5 + 9
+EXPECTED_METRES = 43.4  # 23.8 + 7.0 + 12.6
 
 
 # --------------------------------------------------------------------------
@@ -56,14 +56,16 @@ def client() -> Iterator[TestClient]:
 
 @pytest.fixture
 def cut_off_graph(graph_path: Path, tmp_path: Path) -> CampusGraph:
-    """A temporary graph where Hive_B5_B has both of its edges blocked.
+    """A temporary graph where every way to the Main Staircase is blocked.
 
-    The real JSON is read, copied in memory, changed, and written to
-    ``tmp_path``. The file in ``data/`` is never touched.
+    Hive_B5_B is reached by two corridors and its own staircase; all three
+    have to close before it is genuinely cut off. The real JSON is read,
+    copied in memory, changed, and written to ``tmp_path``. The file in
+    ``data/`` is never touched.
     """
     data = copy.deepcopy(json.loads(graph_path.read_text(encoding="utf-8")))
     for edge in data["edges"]:
-        if edge["id"] in {"Hive_B5_004", "Hive_B5_015"}:
+        if edge["id"] in {"Hive_B5_001", "Hive_B5_004", "Hive_Stairs_B"}:
             edge["blocked"] = True
 
     temporary_file = tmp_path / "cut_off_graph.json"
@@ -179,7 +181,7 @@ def test_a_known_node_carries_its_real_name_and_building(
 
     by_id = {node["id"]: node for node in body}
     assert by_id[ORIGIN] == {
-        "id": "Hive_B5_A",
+        "id": "Hive_B5_C",
         "name": "Staircase 1",
         "building": "Hive",
         "floor": "B5",
@@ -188,7 +190,7 @@ def test_a_known_node_carries_its_real_name_and_building(
         "x": None,
         "y": None,
     }
-    assert by_id[DESTINATION]["name"] == "Staircase 3"
+    assert by_id[DESTINATION]["name"] == "Main Entrance"
     assert by_id[DESTINATION]["floor"] == "B5"
 
 
@@ -240,7 +242,7 @@ def test_an_edge_is_labelled_with_both_ends(client: TestClient) -> None:
     """The report queue shows this, so it has to read as a place, not an id."""
     by_id = {edge["id"]: edge for edge in client.get("/edges").json()}
 
-    assert by_id["Hive_B5_002"]["label"] == "Staircase 1 → Courtyard"
+    assert by_id["Hive_B5_002"]["label"] == "Lift Lobby → Courtyard"
 
 
 def test_edge_endpoints_are_real_nodes(
@@ -389,7 +391,7 @@ def test_there_is_one_step_per_edge(client: TestClient) -> None:
 def test_steps_are_numbered_from_one_in_order(client: TestClient) -> None:
     steps = post_route(client, ORIGIN, DESTINATION).json()["steps"]
 
-    assert [step["step"] for step in steps] == [1, 2]
+    assert [step["step"] for step in steps] == [1, 2, 3]
 
 
 def test_steps_join_up_into_a_continuous_walk(client: TestClient) -> None:
