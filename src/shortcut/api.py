@@ -20,6 +20,7 @@ then open http://127.0.0.1:8000/docs to try the endpoints in a browser.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -102,6 +103,8 @@ __all__ = [
     "DEV_ALLOWED_ORIGINS",
     "AI_ROUTES_ENABLED",
 ]
+
+logger = logging.getLogger(__name__)
 
 
 # --------------------------------------------------------------------------
@@ -340,10 +343,27 @@ def _no_route_reason(route_request: RouteRequest) -> str:
 
 
 def _photo_finder(photos: PhotoStore):
-    """A lookup a route response can use without knowing about photo storage."""
+    """A lookup a route response can use without knowing about photo storage.
+
+    Photos are a nicety on top of a route; the directions are the answer. So
+    a photo store that cannot be reached - expired AWS credentials, S3 having
+    a bad day, an unreadable index - costs the walker their pictures and
+    nothing else. Letting it raise here would turn a decorative failure into
+    a building with no working navigation at all.
+
+    The index is read once, here, rather than once per step: a route can ask
+    about several steps, and each ask tries an edge photo and then a node
+    photo, so without this a single request could hit the store several
+    times over for what is really one snapshot of "what photos exist".
+    """
+    try:
+        snapshot = photos.all()
+    except Exception:
+        logger.exception("Could not read the photo index; routing on without photos.")
+        snapshot = []
 
     def find_photo(target_kind: str, target_id: str, facing: str | None) -> str | None:
-        photo = photos.find_best(target_kind, target_id, facing)
+        photo = PhotoStore.best_of(snapshot, target_kind, target_id, facing)
         return f"/photos/{photo.id}/file" if photo else None
 
     return find_photo

@@ -122,16 +122,31 @@ class PhotoStore:
         Otherwise nothing is returned: a picture looking back the way they came
         is more confusing than no picture at all.
         """
+        return self.best_of(self._read(), target_kind, target_id, facing)
+
+    @staticmethod
+    def best_of(
+        photos: list[Photo], target_kind: str, target_id: str, facing: str | None
+    ) -> Photo | None:
+        """The same choice :meth:`find_best` makes, against an already-read list.
+
+        A route has several steps, each wanting its own photo lookup. Calling
+        :meth:`find_best` per step would re-fetch the whole index that many
+        times - cheap on local disk, but each one is a real network round trip
+        against S3. Reading the index once and reusing it here is what keeps a
+        multi-step route to a single fetch instead of one per step.
+        """
+        matches = [
+            photo
+            for photo in photos
+            if photo.target_kind == target_kind and photo.target_id == target_id
+        ]
         if facing is not None:
-            facing_matches = self.for_target(target_kind, target_id, facing)
+            facing_matches = [photo for photo in matches if photo.facing == facing]
             if facing_matches:
                 return facing_matches[0]
 
-        undirected = [
-            photo
-            for photo in self.for_target(target_kind, target_id)
-            if photo.facing is None
-        ]
+        undirected = [photo for photo in matches if photo.facing is None]
         return undirected[0] if undirected else None
 
     def read_file(self, photo: Photo) -> bytes:

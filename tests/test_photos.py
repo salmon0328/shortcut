@@ -300,6 +300,46 @@ def test_a_step_carries_a_photo_facing_the_way_it_goes(client: TestClient) -> No
     assert steps[0]["photo_url"] == url
 
 
+def test_a_step_uses_a_photo_taken_at_the_place_it_leaves(
+    client: TestClient,
+) -> None:
+    """How the building is really surveyed: stand somewhere, shoot each exit.
+
+    Those photos belong to the *place*, not to the corridor, and before this
+    was handled they were collected diligently and then never shown.
+    """
+    url = upload(
+        client, target_kind="node", target_id=STAIRCASE, facing=COURTYARD
+    ).json()["url"]
+
+    steps = route_steps(client, STAIRCASE, COURTYARD)
+
+    assert steps[0]["photo_url"] == url
+
+
+def test_a_photo_of_the_corridor_beats_one_of_the_place_it_leaves(
+    client: TestClient,
+) -> None:
+    """Both fit the step, and the corridor's own picture is the closer match."""
+    upload(client, target_kind="node", target_id=STAIRCASE, facing=COURTYARD)
+    of_corridor = upload(client, facing=COURTYARD).json()["url"]
+
+    steps = route_steps(client, STAIRCASE, COURTYARD)
+
+    assert steps[0]["photo_url"] == of_corridor
+
+
+def test_a_photo_of_a_place_is_not_shown_walking_a_different_way(
+    client: TestClient,
+) -> None:
+    """Standing in the same spot facing elsewhere is the wrong picture."""
+    upload(client, target_kind="node", target_id=COURTYARD, facing=STAIRCASE)
+
+    steps = route_steps(client, COURTYARD, "Hive_B5_I")
+
+    assert steps[0]["photo_url"] is None
+
+
 def test_a_step_walked_the_other_way_does_not_reuse_that_photo(
     client: TestClient,
 ) -> None:
@@ -314,3 +354,30 @@ def test_steps_have_no_photo_when_none_has_been_taken(client: TestClient) -> Non
     steps = route_steps(client, STAIRCASE, COURTYARD)
 
     assert all(step["photo_url"] is None for step in steps)
+
+
+def test_a_broken_photo_store_costs_the_pictures_and_nothing_else(
+    tmp_path: Path,
+) -> None:
+    """Expired AWS credentials must not take navigation down with them.
+
+    This is not hypothetical: a lab session's token expired mid-use and every
+    /route request became a 500, because looking up a decorative photo was
+    allowed to fail the whole answer.
+    """
+
+    class UnreachableStore(PhotoStore):
+        def all(self, *args, **kwargs):
+            raise PhotoStoreError("S3 says the provided token has expired.")
+
+    app.dependency_overrides[get_photos] = lambda: UnreachableStore(tmp_path)
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/route", json={"origin": STAIRCASE, "destination": COURTYARD}
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert all(step["photo_url"] is None for step in response.json()["steps"])
