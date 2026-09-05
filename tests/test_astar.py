@@ -23,10 +23,10 @@ from shortcut.tools.astar import (
     find_route_or_none,
 )
 
-# The route under test, worked out by hand from the floorplan. Only Hive's B5
-# floor is in the graph right now - B4 was deliberately removed so testing
-# could start against a small, real, single-floor subset before more of the
-# building is surveyed:
+# The route under test, worked out by hand from the floorplan. It stays on B5
+# even though B4 is surveyed too: every way down and back costs more than a
+# minute, so the cross-floor edges cannot shorten it. That is deliberate - the
+# golden route should pin the search, not the size of the survey.
 #   Hive_B5_A --(Hive_B5_002)-> Hive_B5_G --(Hive_B5_007)-> Hive_B5_C
 ORIGIN = "Hive_B5_A"
 DESTINATION = "Hive_B5_C"
@@ -313,8 +313,12 @@ def test_no_blocked_edge_ever_appears_in_a_route(
 def test_blocking_every_edge_of_a_node_makes_it_unreachable(
     graph_with_blocked_edges: Callable[[set[str]], CampusGraph],
 ) -> None:
-    """Hive_B5_B only has one edge left now B4 (and its lift) is gone."""
-    cut_off_graph = graph_with_blocked_edges({"Hive_B5_004"})
+    """Hive_B5_B has two ways out: the corridor to the lobby, and the lift.
+
+    Block both and the lift is stranded on its own floor, which is the point:
+    a place is only unreachable once every edge touching it is closed.
+    """
+    cut_off_graph = graph_with_blocked_edges({"Hive_B5_004", "Hive_B5_015"})
 
     assert cut_off_graph.neighbours("Hive_B5_B") == []
     with pytest.raises(NoRouteFoundError):
