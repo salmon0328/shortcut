@@ -1,15 +1,20 @@
 // The map panel: a floorplan with the route drawn on it.
 //
-// None of the data this needs has been collected yet - there are no floorplan
-// images, and no place has been given coordinates - so most of the time this
-// shows a placeholder saying exactly which piece is missing. That is the point
-// of building it now: the moment a plan is uploaded and calibrated, and places
-// are surveyed, routes start being drawn with no further work.
+// Both Hive floors have a plan and every place has a position, so this draws
+// for real. The placeholders below are still worth keeping: they say which
+// piece is missing for any floor that has not been surveyed yet, which is
+// every floor of the next building somebody adds.
 //
 // Everything is drawn inside one <svg> whose coordinate system is the
 // floorplan image's own pixels. Putting the image *in* the SVG rather than
 // behind it means the route lines line up with the plan at any size, with no
 // arithmetic to keep the two in step.
+//
+// The catch is that a radius written in those units is a radius on a
+// 1570-pixel-wide drawing, so a pin sized to look right on screen would be
+// about three pixels across. Strokes escape this with non-scaling-stroke, in
+// the stylesheet; a circle's radius cannot, so `pinRadius` sizes pins against
+// the plan itself and they stay proportionate on any plan.
 
 import { fetchFloorplan, photoUrl } from "./api.js";
 import { getNodes, nodeName } from "./data.js";
@@ -91,7 +96,12 @@ function toPixels(plan, node) {
   };
 }
 
-function drawRouteOn(svg, plan, route, building, floor) {
+/** Pin radius in plan pixels, so pins look the same size on any floorplan. */
+function pinRadius(size, emphasis) {
+  return (Math.max(size.width, size.height) / 100) * emphasis;
+}
+
+function drawRouteOn(svg, plan, route, building, floor, size) {
   const byId = new Map(getNodes().map((node) => [node.id, node]));
 
   // Only the part of the journey on this floor. A route through three floors
@@ -125,7 +135,7 @@ function drawRouteOn(svg, plan, route, building, floor) {
     const marker = element("circle", {
       cx: point.x,
       cy: point.y,
-      r: isStart || isEnd ? 9 : 5,
+      r: pinRadius(size, isStart || isEnd ? 1.8 : 1.1),
       class: isStart ? "map-pin start" : isEnd ? "map-pin end" : "map-pin",
     });
     marker.appendChild(element("title")).textContent = nodeName(point.node.id);
@@ -187,7 +197,7 @@ async function renderFloor(route, floorInfo) {
     })
   );
 
-  const drawn = route ? drawRouteOn(svg, plan, route, building, floor) : 0;
+  const drawn = route ? drawRouteOn(svg, plan, route, building, floor, size) : 0;
 
   canvas.replaceChildren(svg);
 
