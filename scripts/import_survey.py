@@ -49,6 +49,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 NODE_MAP = PROJECT_ROOT / "data" / "survey_sources" / "hive_node_map.pdf"
 SURVEY = PROJECT_ROOT / "data" / "campus_graph.json"
 PLACES_CSV = PROJECT_ROOT / "data" / "survey_places.csv"
+LINKS_CSV = PROJECT_ROOT / "data" / "survey_links.csv"
 REVIEW = PROJECT_ROOT / "data" / "survey_review.md"
 
 #: Which floor each surveyed page is drawing. The page says so in its title,
@@ -137,17 +138,22 @@ def fit_positions(
     because a floor whose links disagree is a floor that was traced wrong and
     the number saying so is worth more than the scale.
     """
-    by_floor: dict[tuple[str, str], list[str]] = defaultdict(list)
+    # Grouped by the plan drawn on, not only by the floor. One floor of SS is
+    # drawn as two separate images of two wings, and a fraction of the way
+    # across one of them means nothing measured against the other.
+    by_plan: dict[tuple[str, str, int], list[str]] = defaultdict(list)
     for name, place in positions.items():
         node_id = node_id_for(name)
-        if node_id in will_exist and node_id in floor_of:
-            by_floor[floor_of[node_id]].append(node_id)
+        if node_id in will_exist and node_id in floor_of and place.plan is not None:
+            building, floor = floor_of[node_id]
+            by_plan[(building, floor, place.plan.xref)].append(node_id)
 
     coordinates: dict[str, tuple[float, float]] = {}
     scales: dict[tuple[str, str], float] = {}
     notes: list[str] = []
 
-    for floor, node_ids in sorted(by_floor.items()):
+    for (building, floor_name, _), node_ids in sorted(by_plan.items()):
+        floor = (building, floor_name)
         here = set(node_ids)
         plan = positions[node_ids[0].replace("_", "-")].plan
         assert plan is not None
@@ -222,6 +228,21 @@ def unreachable_groups(
                 queue.append(other)
         groups.append(group)
     return sorted(groups, key=len, reverse=True)
+
+
+def read_confirmed_links() -> list[dict[str, str]]:
+    """Links a person settled after reading the review file.
+
+    The drawing leaves some links open - a connector drawn off the edge of
+    the page, a time written as ``?s`` - and this script will not close them.
+    Somebody who knows the building does, once, here, and it is then applied
+    every run like anything else. The alternative is a decision living in a
+    commit message, which is a decision nobody can re-apply.
+    """
+    if not LINKS_CSV.exists():
+        return []
+    with LINKS_CSV.open(encoding="utf-8") as handle:
+        return [row for row in csv.DictReader(handle) if row.get("from")]
 
 
 def load_survey() -> dict:
@@ -352,6 +373,17 @@ def main() -> int:
         if not all(node in known_nodes for node in pair)
     }
 
+    # Links a person settled from the review file. These skip every check
+    # above on purpose: the checks exist to stop the drawing being read too
+    # confidently, and somebody who walked the building is not the drawing.
+    confirmed: dict[frozenset[str], dict[str, str]] = {}
+    for row in read_confirmed_links():
+        pair = frozenset((row["from"], row["to"]))
+        if pair in known_pairs or not pair <= will_exist:
+            continue
+        confirmed[pair] = row
+        new_edges.setdefault(pair, int(row["walk_seconds"]))
+
     # -- positions ---------------------------------------------------------
 
     floor_of: dict[str, tuple[str, str]] = {
@@ -447,10 +479,21 @@ def main() -> int:
         print("re-run with --write to apply")
         return 0
 
-    updated = build_survey(survey, new_places, new_edges, coordinates)
+    updated = build_survey(survey, new_places, new_edges, coordinates, confirmed)
     SURVEY.write_text(json.dumps(updated, indent=2) + "\n", encoding="utf-8")
     print(f"wrote {SURVEY.relative_to(PROJECT_ROOT)}: {summary}")
     return 0
+
+
+def _is_walkway(first: str, second: str) -> bool:
+    return first.startswith("Hive_SS") or second.startswith("Hive_SS")
+
+
+def _yes(written: str | None, *, default: bool) -> bool:
+    """A yes/no column, with the drawing's own guess when the column is blank."""
+    if written is None or written.strip() == "":
+        return default
+    return written.strip().lower() in {"true", "yes", "y", "1"}
 
 
 def build_survey(
@@ -458,6 +501,7 @@ def build_survey(
     new_places: list[NewPlace],
     new_edges: dict[frozenset[str], int],
     coordinates: dict[str, tuple[float, float]],
+    confirmed: dict[frozenset[str], dict[str, str]] | None = None,
 ) -> dict:
     """The survey with the new places and links folded in.
 
@@ -483,28 +527,29 @@ def build_survey(
         nodes.append(node)
 
     edges = [dict(edge) for edge in survey["edges"]]
+    confirmed = confirmed or {}
     for pair in sorted(new_edges, key=sorted):
         first, second = sorted(pair)
         seconds = new_edges[pair]
-        edges.append(
-            {
-                "id": f"{first}--{second}",
-                "from": first,
-                "to": second,
-                "distance_m": metres_for(seconds),
-                "walk_seconds": seconds,
-                # The linkway between the buildings is the one stretch of this
-                # survey that is out in the weather. Every other link measured
-                # so far is indoors, which is why asking for a dry route has
-                # never changed anything.
-                "covered": WALKWAY_BUILDING not in {first.split("_")[0], second.split("_")[0]}
-                and not first.startswith("Hive_SS")
-                and not second.startswith("Hive_SS"),
-                "stairs": False,
-                "lift": False,
-                "blocked": False,
-            }
-        )
+        settled = confirmed.get(pair, {})
+        edge = {
+            "id": f"{first}--{second}",
+            "from": first,
+            "to": second,
+            "distance_m": metres_for(seconds),
+            "walk_seconds": seconds,
+            # The linkway between the buildings is the one stretch of this
+            # survey that is out in the weather. Every other link measured so
+            # far is indoors, which is why asking for a dry route has never
+            # changed anything.
+            "covered": _yes(settled.get("covered"), default=not _is_walkway(first, second)),
+            "stairs": _yes(settled.get("stairs"), default=False),
+            "lift": _yes(settled.get("lift"), default=False),
+            "blocked": False,
+        }
+        if settled.get("note"):
+            edge["note"] = settled["note"]
+        edges.append(edge)
 
     return {**survey, "nodes": nodes, "edges": edges}
 

@@ -920,6 +920,30 @@
       "stairs": false,
       "lift": false,
       "blocked": false
+    },
+    {
+      "id": "SS_B3_A--SS_Canteen_A",
+      "from": "SS_B3_A",
+      "to": "SS_Canteen_A",
+      "distance_m": 7.0,
+      "walk_seconds": 5,
+      "covered": true,
+      "stairs": false,
+      "lift": false,
+      "blocked": false,
+      "note": "Drawn on page 9 as a 5s line labelled \"To SS-Canteen-A\". Confirmed on site as flat - the B3/B4 labels name the two buildings' own levels, which meet without a step. This is the only link between B3 and the rest of the map."
+    },
+    {
+      "id": "SS_B3_D--SS_B3_E",
+      "from": "SS_B3_D",
+      "to": "SS_B3_E",
+      "distance_m": 9.8,
+      "walk_seconds": 7,
+      "covered": true,
+      "stairs": false,
+      "lift": false,
+      "blocked": false,
+      "note": "Time ESTIMATED, not walked. The surveyor left this one as ?s. 7s is its drawn length scaled against the two timed links on the same plan, which disagree with each other by 36%, so read it as 6-9s. Replace it with a real measurement when somebody walks it."
     }
   ]
 }

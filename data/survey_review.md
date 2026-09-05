@@ -31,14 +31,13 @@ These places route normally; they just do not draw on a plan yet.
 - `S3-B3-A`
 - `SS-B3-F`
 
-## Places nothing connects to the rest (14)
+## Places nothing connects to the rest (0)
 
 Routing between two places in different groups returns no route at all.
 Every group after the first is waiting on a connector from the list above -
 the links between floors are the ones the drawing does not settle.
 
-- 13 places: `Hive_B3_A`, `Hive_B3_B`, `Hive_B3_C`, `Hive_B3_D`, `Hive_B3_E`, `Hive_B3_F`, `Hive_B3_G`, `S3_B3_A`, `S3_B3_B`, `SS_B3_A`, `SS_B3_B`, `SS_B3_D`, `SS_B3_F`
-- 1 places: `SS_B3_E`
+- none, every place can be walked to from every other
 
 ## Scale fitted for each floor
 
@@ -47,5 +46,6 @@ the links between floors are the ones the drawing does not settle.
 - Hive B5: 0.058602 m/pixel from 15 links, worst link off by 58%.
 - Hive-SS B4: only 2 link(s) join two placed places, too few to trust a scale, so these places get no position.
 - S3 B3: only 0 link(s) join two placed places, too few to trust a scale, so these places get no position.
-- SS B3: only 2 link(s) join two placed places, too few to trust a scale, so these places get no position.
+- SS B3: only 1 link(s) join two placed places, too few to trust a scale, so these places get no position.
+- SS B3: only 1 link(s) join two placed places, too few to trust a scale, so these places get no position.
 - SS B4: only 1 link(s) join two placed places, too few to trust a scale, so these places get no position.
