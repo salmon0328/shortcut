@@ -184,13 +184,28 @@ def fit_positions(
             )
             continue
 
-        ratios.sort()
-        scale = ratios[len(ratios) // 2]
-        spread = max(abs(ratio - scale) / scale for ratio in ratios)
+        # The smallest ratio, not the average of them.
+        #
+        # A* is only guaranteed to return the shortest route while its
+        # straight-line estimate never exceeds the real walk. Take the median
+        # and half the links come out longer on the plan than they are in the
+        # building, the estimate overshoots on those, and the search starts
+        # quietly returning routes that are not the shortest - checked, and it
+        # did: 76 of 1560 trips got worse. The smallest ratio is the largest
+        # scale at which every link stays within its surveyed length, so the
+        # estimate is always a little short and never once too long.
+        #
+        # The cost is that the plan reads smaller than the building really is,
+        # which changes nothing anybody sees: the map divides the scale back
+        # out to place a pin, so it cancels, and the only other reader is the
+        # estimate that wanted the lower bound in the first place.
+        scale = min(ratios)
+        spread = max(ratios) / scale
         scales[floor] = scale
         notes.append(
-            f"{floor[0]} {floor[1]}: {scale:.6f} m/pixel from {len(ratios)} links, "
-            f"worst link off by {spread * 100:.0f}%."
+            f"{floor[0]} {floor[1]}: {scale:.6f} m/pixel from {len(ratios)} links. "
+            f"The most direct link is {spread:.1f}x tighter than the least, which is "
+            f"how much corridors bend on this floor."
         )
         for node_id in node_ids:
             x, y = pixels(node_id)

@@ -41,9 +41,9 @@ the links between floors are the ones the drawing does not settle.
 
 ## Scale fitted for each floor
 
-- Hive B3: 0.078875 m/pixel from 7 links, worst link off by 28%.
-- Hive B4: 0.077500 m/pixel from 12 links, worst link off by 55%.
-- Hive B5: 0.058602 m/pixel from 15 links, worst link off by 58%.
+- Hive B3: 0.056477 m/pixel from 7 links. The most direct link is 1.5x tighter than the least, which is how much corridors bend on this floor.
+- Hive B4: 0.054390 m/pixel from 12 links. The most direct link is 2.2x tighter than the least, which is how much corridors bend on this floor.
+- Hive B5: 0.044190 m/pixel from 15 links. The most direct link is 2.1x tighter than the least, which is how much corridors bend on this floor.
 - Hive-SS B4: only 2 link(s) join two placed places, too few to trust a scale, so these places get no position.
 - S3 B3: only 0 link(s) join two placed places, too few to trust a scale, so these places get no position.
 - SS B3: only 1 link(s) join two placed places, too few to trust a scale, so these places get no position.
