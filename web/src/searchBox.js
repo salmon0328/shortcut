@@ -56,9 +56,16 @@ const labelFor = (node) => `${node.name} (${node.building} · ${node.floor})`;
  */
 export function createSearchBox(input, list, onChange = () => {}, options = {}) {
   const prefer = options.prefer ?? (() => false);
+  // An optional × beside the input. Shown only while there is something to
+  // clear, so an empty box stays as plain as it looks.
+  const clearButton = input.parentElement?.querySelector("[data-clear]") ?? null;
   let selectedId = null;
   let highlighted = -1;
   let shown = [];
+
+  function syncClearButton() {
+    if (clearButton) clearButton.hidden = input.value === "";
+  }
 
   function close() {
     list.hidden = true;
@@ -70,7 +77,26 @@ export function createSearchBox(input, list, onChange = () => {}, options = {}) 
     selectedId = node.id;
     input.value = labelFor(node);
     close();
+    syncClearButton();
     onChange(node);
+  }
+
+  function clear() {
+    selectedId = null;
+    input.value = "";
+    close();
+    syncClearButton();
+    onChange(null);
+  }
+
+  if (clearButton) {
+    // mousedown, like the suggestions: it fires before the input loses
+    // focus, so the list is not closed and reopened under the tap.
+    clearButton.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+      clear();
+      input.focus();
+    });
   }
 
   function render(nodes) {
@@ -129,6 +155,7 @@ export function createSearchBox(input, list, onChange = () => {}, options = {}) 
       selectedId = null;
       onChange(null);
     }
+    syncClearButton();
     render(suggestionsFor(input.value, prefer));
   });
 
@@ -161,11 +188,6 @@ export function createSearchBox(input, list, onChange = () => {}, options = {}) 
   return {
     selectedId: () => selectedId,
     select: (node) => choose(node),
-    clear: () => {
-      selectedId = null;
-      input.value = "";
-      close();
-      onChange(null);
-    },
+    clear,
   };
 }

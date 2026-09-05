@@ -1,8 +1,13 @@
 // The route planner: pick two places, ask the backend, then walk the answer
 // one step at a time.
+//
+// Two screens share this file. The plan screen owns the form and the route
+// summary; the steps screen owns the step-by-step list. They are one module
+// because they show the same route, and the summary is the way in to the
+// steps.
 
 import { photoUrl, requestRoute, requestRouteOptions } from "./api.js";
-import { nodeName } from "./data.js";
+import { nodeLabel, nodeName } from "./data.js";
 import { createSearchBox } from "./searchBox.js";
 import { showEmptyMap, showRouteOnMap } from "./mapView.js";
 
@@ -16,9 +21,12 @@ const allowLiftCheckbox = document.querySelector("#allow-lift");
 const allowShuttleCheckbox = document.querySelector("#allow-shuttle");
 const shelteredOnlyCheckbox = document.querySelector("#sheltered-only");
 
+// The summary, on the plan screen.
 const resultCard = document.querySelector("#result");
 const totalTimeOutput = document.querySelector("#total-time");
-const totalDistanceOutput = document.querySelector("#total-distance");
+const summaryLine = document.querySelector("#summary-line");
+const summaryFrom = document.querySelector("#summary-from");
+const summaryTo = document.querySelector("#summary-to");
 const stairsBadge = document.querySelector("#badge-stairs");
 const liftBadge = document.querySelector("#badge-lift");
 const shuttleBadge = document.querySelector("#badge-shuttle");
@@ -26,6 +34,9 @@ const shelterBadge = document.querySelector("#badge-shelter");
 const totalExtra = document.querySelector("#total-extra");
 const showOptionsButton = document.querySelector("#show-options");
 const optionsList = document.querySelector("#route-options");
+
+// The walk, on the steps screen.
+const arrivalTime = document.querySelector("#arrival-time");
 const stepsList = document.querySelector("#route-steps");
 const stepProgress = document.querySelector("#step-progress");
 const backButton = document.querySelector("#back-button");
@@ -66,7 +77,7 @@ export function showPlanLoading(text) {
 export function stopPlanLoading() {
   loadingMessage.hidden = true;
   findButton.disabled = false;
-  findButton.textContent = "Find route";
+  findButton.textContent = "Get route";
 }
 
 export function showPlanError(text) {
@@ -89,17 +100,64 @@ function formatSeconds(totalSeconds) {
   return remainder === 0 ? `${minutes} min` : `${minutes} min ${remainder} sec`;
 }
 
-/** 55.599999999999994 -> "55.6 m". Rounds away floating-point noise. */
-const formatMetres = (metres) => `${metres.toFixed(1)} m`;
+/** Whole minutes, rounded up: nobody plans around "4 min 12 sec". */
+function formatMinutes(totalSeconds) {
+  const minutes = Math.max(1, Math.ceil(totalSeconds / 60));
+  return `${minutes} min${minutes === 1 ? "" : "s"}`;
+}
+
+/** 55.599999999999994 -> "56 m". Whole metres are enough for a walk. */
+const formatMetres = (metres) => `${Math.round(metres)} m`;
 
 function setBadge(element, isTrue, trueText, falseText) {
   element.textContent = isTrue ? `✓ ${trueText}` : `✗ ${falseText}`;
   element.className = isTrue ? "badge yes" : "badge no";
 }
 
+/** "mostly sheltered", from how much of the walk is under cover. */
+function shelterWording(route) {
+  const steps = route.steps ?? [];
+  const total = steps.reduce((sum, step) => sum + step.distance_m, 0);
+  if (total === 0) return "";
+
+  const covered = steps
+    .filter((step) => step.covered)
+    .reduce((sum, step) => sum + step.distance_m, 0);
+  const share = covered / total;
+
+  if (share >= 0.999) return "fully sheltered";
+  if (share >= 0.6) return "mostly sheltered";
+  if (share > 0) return "partly sheltered";
+  return "uncovered";
+}
+
 // --------------------------------------------------------------------------
 // Walking through the steps
 // --------------------------------------------------------------------------
+
+function photoOrPlaceholder(step) {
+  // A photo looking the way this step goes, if one has been taken. The
+  // backend only ever sends one facing the right direction.
+  if (step.photo_url) {
+    const photo = document.createElement("img");
+    photo.className = "step-photo";
+    photo.src = photoUrl(step.photo_url);
+    photo.alt = `Looking towards ${nodeName(step.to_id)}`;
+    photo.loading = "lazy";
+    return photo;
+  }
+
+  const empty = document.createElement("div");
+  empty.className = "step-photo-empty";
+  empty.setAttribute("aria-hidden", "true");
+  empty.innerHTML =
+    '<svg viewBox="0 0 24 24" width="36" height="36">' +
+    '<rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/>' +
+    '<circle cx="8.5" cy="10" r="1.6" fill="currentColor"/>' +
+    '<path d="M5 17l4.5-4.5 3 3 2.5-2.5L19 17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>' +
+    "</svg>";
+  return empty;
+}
 
 function renderSteps() {
   stepsList.replaceChildren();
@@ -118,16 +176,7 @@ function renderSteps() {
     // Only the step being walked shows its full description, so the list
     // stays scannable.
     if (index === currentStepIndex) {
-      // A photo looking the way this step goes, if one has been taken. The
-      // backend only ever sends one facing the right direction.
-      if (step.photo_url) {
-        const photo = document.createElement("img");
-        photo.className = "step-photo";
-        photo.src = photoUrl(step.photo_url);
-        photo.alt = `Looking towards ${nodeName(step.to_id)}`;
-        photo.loading = "lazy";
-        item.appendChild(photo);
-      }
+      item.appendChild(photoOrPlaceholder(step));
 
       const detail = document.createElement("p");
       detail.className = "step-detail";
@@ -147,6 +196,12 @@ function renderSteps() {
         step.walk_seconds
       )} · arrives at ${nodeName(step.to_id)}`;
       item.appendChild(meta);
+
+      // The Back button belongs to the card being walked, as in the sketch.
+      // Moving the element keeps its click handler.
+      backButton.className = "secondary small step-back";
+      backButton.hidden = false;
+      item.appendChild(backButton);
     }
 
     stepsList.appendChild(item);
@@ -157,8 +212,20 @@ function renderSteps() {
     const done = document.createElement("li");
     done.className = "step is-current step-arrived";
     done.textContent = "You have arrived.";
+    backButton.className = "secondary small step-back";
+    backButton.hidden = false;
+    done.appendChild(backButton);
     stepsList.appendChild(done);
   }
+
+  // How long is left, counted from the step being walked. Waits count: a
+  // lift you have to stand around for is part of getting there.
+  const remaining = currentSteps
+    .slice(currentStepIndex)
+    .reduce((sum, step) => sum + step.walk_seconds + (step.wait_seconds ?? 0), 0);
+  arrivalTime.textContent = arrived
+    ? "You have arrived"
+    : `${formatMinutes(remaining)} to arrival`;
 
   stepProgress.textContent = arrived
     ? "Journey complete"
@@ -167,7 +234,7 @@ function renderSteps() {
   backButton.disabled = currentStepIndex === 0;
   nextButton.disabled = arrived;
   nextButton.textContent =
-    currentStepIndex === currentSteps.length - 1 ? "I'm here" : "Next step";
+    currentStepIndex === currentSteps.length - 1 ? "I'm here" : "I'm here, next step";
 }
 
 function showRoute(route) {
@@ -176,8 +243,15 @@ function showRoute(route) {
   // Time shown is time on the move plus any waiting, because that is what
   // "how long will this take me" means to somebody standing at a bus stop.
   const totalTime = route.total_walk_seconds + (route.total_wait_seconds ?? 0);
-  totalTimeOutput.textContent = formatSeconds(totalTime);
-  totalDistanceOutput.textContent = formatMetres(route.walking_distance_m ?? 0);
+  totalTimeOutput.textContent = formatMinutes(totalTime);
+
+  const shelter = shelterWording(route);
+  summaryLine.textContent = shelter
+    ? `${formatMetres(route.walking_distance_m ?? 0)}, ${shelter}`
+    : formatMetres(route.walking_distance_m ?? 0);
+
+  summaryFrom.textContent = nodeLabel(route.nodes[0]);
+  summaryTo.textContent = nodeLabel(route.nodes[route.nodes.length - 1]);
 
   // Only worth saying when the two numbers differ, which is when part of the
   // journey was a ride rather than a walk.
@@ -207,8 +281,9 @@ function showRoute(route) {
     note.className = "step step-arrived";
     note.textContent = "You are already there.";
     stepsList.appendChild(note);
+    arrivalTime.textContent = "You are already there";
     stepProgress.textContent = "";
-    backButton.disabled = true;
+    backButton.hidden = true;
     nextButton.disabled = true;
   } else {
     renderSteps();
@@ -216,7 +291,6 @@ function showRoute(route) {
 
   resultCard.hidden = false;
 }
-
 
 // --------------------------------------------------------------------------
 // Other ways round
@@ -247,7 +321,7 @@ function optionCard(option, isPrimary) {
       other.classList.remove("is-current");
     }
     card.classList.add("is-current");
-    // showRoute only hides and refills the result card; it never touches this
+    // showRoute only hides and refills the summary; it never touches this
     // list, so the options stay on screen to be switched between.
     showRoute(option.route);
   });
@@ -275,7 +349,7 @@ showOptionsButton.addEventListener("click", async () => {
 
   if (!optionsList.hidden && optionsList.childElementCount > 0) {
     optionsList.hidden = true;
-    showOptionsButton.textContent = "View other routes";
+    showOptionsButton.textContent = "View others";
     return;
   }
 
@@ -283,7 +357,7 @@ showOptionsButton.addEventListener("click", async () => {
   showOptionsButton.textContent = "Looking…";
   try {
     renderChoices(await requestRouteOptions(lastRequest));
-    showOptionsButton.textContent = "Hide other routes";
+    showOptionsButton.textContent = "Hide others";
   } catch (error) {
     showPlanError(error.message);
   } finally {
@@ -318,7 +392,7 @@ async function findRoute(origin, destination) {
   lastRequest = { origin, destination, ...currentOptions() };
   optionsList.replaceChildren();
   optionsList.hidden = true;
-  showOptionsButton.textContent = "View other routes";
+  showOptionsButton.textContent = "View others";
 
   try {
     const route = await requestRoute(lastRequest);
