@@ -6,8 +6,8 @@
       "building": "Hive",
       "floor": "B5",
       "type": "junction",
-      "x": 28.22,
-      "y": 21.94
+      "x": 21.28,
+      "y": 16.54
     },
     {
       "id": "Hive_B5_B",
@@ -15,8 +15,8 @@
       "building": "Hive",
       "floor": "B5",
       "type": "stairs",
-      "x": 28.94,
-      "y": 17.32
+      "x": 21.83,
+      "y": 13.06
     },
     {
       "id": "Hive_B5_C",
@@ -24,8 +24,8 @@
       "building": "Hive",
       "floor": "B5",
       "type": "stairs",
-      "x": 22.72,
-      "y": 43.65
+      "x": 17.13,
+      "y": 32.92
     },
     {
       "id": "Hive_B5_D",
@@ -33,8 +33,8 @@
       "building": "Hive",
       "floor": "B5",
       "type": "stairs",
-      "x": 48.18,
-      "y": 36.25
+      "x": 36.33,
+      "y": 27.34
     },
     {
       "id": "Hive_B5_E",
@@ -42,8 +42,8 @@
       "building": "Hive",
       "floor": "B5",
       "type": "stairs",
-      "x": 52.34,
-      "y": 18.03
+      "x": 39.47,
+      "y": 13.6
     },
     {
       "id": "Hive_B5_F",
@@ -51,8 +51,8 @@
       "building": "Hive",
       "floor": "B5",
       "type": "junction",
-      "x": 41.86,
-      "y": 15.03
+      "x": 31.56,
+      "y": 11.33
     },
     {
       "id": "Hive_B5_G",
@@ -60,8 +60,8 @@
       "building": "Hive",
       "floor": "B5",
       "type": "junction",
-      "x": 40.89,
-      "y": 27.49
+      "x": 30.83,
+      "y": 20.73
     },
     {
       "id": "Hive_B5_H",
@@ -69,8 +69,8 @@
       "building": "Hive",
       "floor": "B5",
       "type": "junction",
-      "x": 40.17,
-      "y": 36.97
+      "x": 30.29,
+      "y": 27.88
     },
     {
       "id": "Hive_B5_I",
@@ -78,8 +78,8 @@
       "building": "Hive",
       "floor": "B5",
       "type": "junction",
-      "x": 56.63,
-      "y": 25.79
+      "x": 42.7,
+      "y": 19.45
     },
     {
       "id": "Hive_B4_A",
@@ -87,8 +87,8 @@
       "building": "Hive",
       "floor": "B4",
       "type": "junction",
-      "x": 32.62,
-      "y": 29.36
+      "x": 22.89,
+      "y": 20.6
     },
     {
       "id": "Hive_B4_B",
@@ -96,8 +96,8 @@
       "building": "Hive",
       "floor": "B4",
       "type": "stairs",
-      "x": 33.62,
-      "y": 23.46
+      "x": 23.59,
+      "y": 16.46
     },
     {
       "id": "Hive_B4_C",
@@ -105,8 +105,8 @@
       "building": "Hive",
       "floor": "B4",
       "type": "stairs",
-      "x": 25.84,
-      "y": 58.19
+      "x": 18.13,
+      "y": 40.83
     },
     {
       "id": "Hive_B4_D",
@@ -114,8 +114,8 @@
       "building": "Hive",
       "floor": "B4",
       "type": "stairs",
-      "x": 59.52,
-      "y": 49.74
+      "x": 41.77,
+      "y": 34.91
     },
     {
       "id": "Hive_B4_E",
@@ -123,8 +123,8 @@
       "building": "Hive",
       "floor": "B4",
       "type": "stairs",
-      "x": 64.44,
-      "y": 24.46
+      "x": 45.23,
+      "y": 17.17
     },
     {
       "id": "Hive_B4_F",
@@ -132,8 +132,8 @@
       "building": "Hive",
       "floor": "B4",
       "type": "junction",
-      "x": 38.42,
-      "y": 55.0
+      "x": 26.97,
+      "y": 38.6
     },
     {
       "id": "Hive_B4_G",
@@ -141,8 +141,8 @@
       "building": "Hive",
       "floor": "B4",
       "type": "junction",
-      "x": 47.89,
-      "y": 50.59
+      "x": 33.61,
+      "y": 35.51
     },
     {
       "id": "Hive_A",
@@ -150,8 +150,8 @@
       "building": "Hive",
       "floor": "B4",
       "type": "junction",
-      "x": 21.23,
-      "y": 66.44
+      "x": 14.9,
+      "y": 46.63
     },
     {
       "id": "Hive_B",
@@ -159,8 +159,8 @@
       "building": "Hive",
       "floor": "B4",
       "type": "junction",
-      "x": 38.18,
-      "y": 61.92
+      "x": 26.79,
+      "y": 43.46
     },
     {
       "id": "Hive_B3_A",
@@ -168,8 +168,8 @@
       "building": "Hive",
       "floor": "B3",
       "type": "junction",
-      "x": 53.89,
-      "y": 29.99
+      "x": 38.58,
+      "y": 21.48
     },
     {
       "id": "Hive_B3_B",
@@ -177,8 +177,8 @@
       "building": "Hive",
       "floor": "B3",
       "type": "junction",
-      "x": 55.25,
-      "y": 25.85
+      "x": 39.56,
+      "y": 18.51
     },
     {
       "id": "Hive_B3_C",
@@ -186,8 +186,8 @@
       "building": "Hive",
       "floor": "B3",
       "type": "junction",
-      "x": 49.11,
-      "y": 51.0
+      "x": 35.16,
+      "y": 36.51
     },
     {
       "id": "Hive_B3_D",
@@ -195,8 +195,8 @@
       "building": "Hive",
       "floor": "B3",
       "type": "junction",
-      "x": 73.88,
-      "y": 45.32
+      "x": 52.9,
+      "y": 32.45
     },
     {
       "id": "Hive_B3_E",
@@ -204,8 +204,8 @@
       "building": "Hive",
       "floor": "B3",
       "type": "junction",
-      "x": 77.31,
-      "y": 26.32
+      "x": 55.35,
+      "y": 18.85
     },
     {
       "id": "Hive_B3_F",
@@ -213,8 +213,8 @@
       "building": "Hive",
       "floor": "B3",
       "type": "junction",
-      "x": 63.32,
-      "y": 25.82
+      "x": 45.34,
+      "y": 18.49
     },
     {
       "id": "Hive_B3_G",
@@ -222,8 +222,8 @@
       "building": "Hive",
       "floor": "B3",
       "type": "junction",
-      "x": 57.15,
-      "y": 21.15
+      "x": 40.92,
+      "y": 15.15
     },
     {
       "id": "Hive_C",
@@ -231,8 +231,8 @@
       "building": "Hive",
       "floor": "B4",
       "type": "junction",
-      "x": 50.22,
-      "y": 58.83
+      "x": 35.25,
+      "y": 41.29
     },
     {
       "id": "Hive_D",
@@ -240,8 +240,8 @@
       "building": "Hive",
       "floor": "B4",
       "type": "junction",
-      "x": 64.22,
-      "y": 57.45
+      "x": 45.07,
+      "y": 40.32
     },
     {
       "id": "Hive_SS_Walkway_A",

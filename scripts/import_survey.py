@@ -520,13 +520,22 @@ def build_survey(
 ) -> dict:
     """The survey with the new places and links folded in.
 
-    Committed places keep every field they had; a position is only ever added,
-    never moved. Re-running with the same drawing therefore produces no diff,
+    Committed places keep every field they had, with one exception: a position
+    is re-read from the drawing every time.
+
+    The exception is the point. A name is a judgement somebody made and this
+    script has no standing to overrule it. A position is not a judgement, it
+    is a measurement off a plan, and the whole reason to keep the drawing as
+    the source is that a better tracing should reach the map. Freezing the
+    first position ever written means a corrected scale silently never
+    arrives, which is exactly what happened the first time this ran.
+
+    Re-running against an unchanged drawing therefore still produces no diff,
     which is what makes it safe to run whenever the map is redrawn.
     """
     nodes = [dict(node) for node in survey["nodes"]]
     for node in nodes:
-        if node["id"] in coordinates and "x" not in node:
+        if node["id"] in coordinates:
             node["x"], node["y"] = coordinates[node["id"]]
 
     for place in sorted(new_places, key=lambda item: item.node_id):
