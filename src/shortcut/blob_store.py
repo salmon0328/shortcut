@@ -75,7 +75,15 @@ class S3BlobStore(BlobStore):
     def _client(self):
         import boto3
 
-        return boto3.client("s3")
+        # The region is passed explicitly rather than left to boto3 to find.
+        # boto3 reads AWS_DEFAULT_REGION; the rest of this project, and its
+        # .env.example, say AWS_REGION - which is the name the AWS console
+        # hands you when it gives you keys. Without this a machine configured
+        # exactly as the example describes gets no region at all, and the
+        # failure arrives later as a confusing error about the bucket rather
+        # than as "you did not say which region".
+        region = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION")
+        return boto3.client("s3", region_name=region) if region else boto3.client("s3")
 
     def _full_key(self, key: str) -> str:
         return f"{self.prefix}/{key}" if self.prefix else key

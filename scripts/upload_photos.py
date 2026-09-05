@@ -17,16 +17,22 @@ sharpened later by anything that can tell where a camera was pointed; a
 *guessed* direction could not be, because nothing downstream would know it was
 a guess.
 
-Re-running is safe: a place that already has as many photos as its folder does
-is left alone, so this can be run again after another walk without uploading
-the first batch twice.
+Re-running is safe, and it is careful about what is already up there. A file
+is matched to what the store holds by its exact byte size, not by counting
+photos per place, because the two are not the same job: somebody uploading by
+hand picks the best few of a folder and labels which way each one faces, and
+counting would either re-upload their whole folder as duplicates or skip the
+ones they left out. Matching by content adds only what is genuinely missing
+and never touches a photo somebody has already labelled.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import mimetypes
 import os
+import subprocess
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -41,17 +47,81 @@ from shortcut.photo_store import ALLOWED_CONTENT_TYPES, PhotoStore  # noqa: E402
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PHOTOS = PROJECT_ROOT / "data" / "photos"
 
+#: The last commit before the survey was re-lettered. The folders were named
+#: against the map as it stood then, so that is the map their names mean.
+SURVEY_AT_THE_WALK = "94d8b4a^:data/campus_graph.json"
 
-def node_id_for_folder(folder: Path, places: dict[str, dict]) -> str | None:
-    """``Hive-B5-G`` -> ``Hive_B5_G``. The walk named its folders after places.
 
-    Matched without regard to case. The walk produced ``SS-canteen-A`` where
-    the map says ``SS-Canteen-A``, and losing seven photographs of a canteen
-    to a capital letter would be a silly way to lose them.
+def survey_at_the_walk() -> dict[str, tuple[str, str, str]]:
+    """Every place the survey held when the photo walk happened."""
+    shown = subprocess.run(
+        ["git", "show", SURVEY_AT_THE_WALK],
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    return {
+        node["id"]: (node["building"], node["floor"], node["name"])
+        for node in json.loads(shown)["nodes"]
+    }
+
+
+#: Places whose *name* changed in the re-survey as well as their id, so the
+#: rule below cannot find them. Each of these is taken from where a teammate
+#: filed those same photographs by hand, matched to the file byte for byte -
+#: not from reading the map and deciding what looks likely.
+RENAMED = {
+    "Hive_B4_E": "Hive_B4_G",  # "Side Entrance" was split into 1 and 2
+    "Hive_B4_B": "Hive_B4_A",  # "Lift" folded into "Lift Lobby"
+    "Hive_B5_B": "Hive_B5_A",  # the same, one floor up
+    "Hive_B4_F": "Hive_B4_F",  # "Back Entrance" renamed, id unchanged
+}
+
+
+def folder_to_place(survey_at_the_walk: dict[str, tuple[str, str, str]],
+                    places: dict[str, dict]) -> dict[str, str]:
+    """Which place each photo folder belongs to, by name rather than by id.
+
+    The folders were named on the walk, and the survey was re-lettered
+    afterwards: ``Hive-B5-A`` was Staircase 1 then and is the Lift Lobby now.
+    Taking the folder name as an id therefore files every photograph of that
+    floor against the wrong place - silently, since both ids exist.
+
+    So the folder's id is read against the survey *as it stood when the walk
+    happened*, turned into the name of the place it meant, and matched to
+    whatever carries that name today. Checked against the forty-three photos a
+    teammate had already filed by hand: forty agree, and the three that do not
+    are the places whose names changed too, listed in RENAMED above.
     """
-    wanted = folder.name.replace("-", "_").casefold()
+    by_name = {
+        (node["building"], node["floor"], node["name"]): node_id
+        for node_id, node in places.items()
+    }
+    mapping = {}
+    for old_id, key in survey_at_the_walk.items():
+        today = by_name.get(key)
+        if today:
+            mapping[old_id] = today
+    mapping.update(RENAMED)
+    return mapping
+
+
+def node_id_for_folder(
+    folder: Path, places: dict[str, dict], relettered: dict[str, str]
+) -> str | None:
+    """``Hive-B5-G`` -> the place it was named after, whatever it is called now.
+
+    Matched without regard to case: the walk produced ``SS-canteen-A`` where
+    the map says ``SS-Canteen-A``, and losing seven photographs of a canteen to
+    a capital letter would be a silly way to lose them.
+    """
+    wanted = folder.name.replace("-", "_")
+    for old_id, new_id in relettered.items():
+        if old_id.casefold() == wanted.casefold():
+            return new_id
     return next(
-        (node_id for node_id in places if node_id.casefold() == wanted), None
+        (node_id for node_id in places if node_id.casefold() == wanted.casefold()), None
     )
 
 
@@ -76,6 +146,13 @@ def main() -> int:
 
     survey = import_survey.load_survey()
     places = {node["id"]: node for node in survey["nodes"]}
+    relettered = folder_to_place(survey_at_the_walk(), places)
+    moved = {old: new for old, new in relettered.items() if old != new}
+    if moved:
+        print(f"{len(moved)} folder(s) were named before the survey was re-lettered:")
+        for old, new in sorted(moved.items()):
+            print(f"  {old:<14} is now {new:<14} ({places[new]['name']})")
+        print()
 
     folders = sorted(
         path
@@ -85,14 +162,19 @@ def main() -> int:
 
     store = PhotoStore(PHOTOS)
     counts: dict[str, int] = defaultdict(int)
+    # (place, exact byte size) of every photo already stored. Two different
+    # photographs agreeing to the byte is not something worth worrying about;
+    # re-uploading a hundred that are already there is.
+    stored: set[tuple[str, int]] = set()
     for photo in store.all():
         counts[photo.target_id] += 1
+        stored.add((photo.target_id, photo.size_bytes))
 
     uploaded = skipped = 0
     unknown: list[str] = []
 
     for folder in folders:
-        node_id = node_id_for_folder(folder, places)
+        node_id = node_id_for_folder(folder, places, relettered)
         files = images_in(folder)
 
         place = places.get(node_id) if node_id else None
@@ -103,16 +185,20 @@ def main() -> int:
             unknown.append(f"{folder.name} ({len(files)} photos)")
             continue
 
-        if counts[node_id] >= len(files):
-            skipped += len(files)
+        wanted = [
+            path for path in files if (node_id, path.stat().st_size) not in stored
+        ]
+        skipped += len(files) - len(wanted)
+        if not wanted:
             continue
 
-        print(f"  {node_id:<22} {len(files)} photos  ({place['name']})")
+        already = f", {len(files) - len(wanted)} already there" if len(wanted) != len(files) else ""
+        print(f"  {node_id:<22} {len(wanted)} photos  ({place['name']}{already})")
         if not arguments.write:
-            uploaded += len(files)
+            uploaded += len(wanted)
             continue
 
-        for path in files:
+        for path in wanted:
             store.add(
                 content=path.read_bytes(),
                 content_type=mimetypes.guess_type(path.name)[0] or "image/jpeg",
@@ -141,7 +227,9 @@ def main() -> int:
         node_id
         for node_id in places
         if not counts[node_id]
-        and node_id not in {node_id_for_folder(folder, places) for folder in folders}
+        and node_id not in {
+            node_id_for_folder(folder, places, relettered) for folder in folders
+        }
     )
     if missing:
         print(f"\n{len(missing)} place(s) in the survey have no photos at all:")

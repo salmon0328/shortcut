@@ -381,3 +381,90 @@ def test_a_broken_photo_store_costs_the_pictures_and_nothing_else(
 
     assert response.status_code == 200
     assert all(step["photo_url"] is None for step in response.json()["steps"])
+
+
+# --------------------------------------------------------------------------
+# Labelling a photo after it was uploaded
+# --------------------------------------------------------------------------
+#
+# A bulk upload cannot know which way a camera pointed - the files carry a
+# number and a timestamp and nothing else - so photos arrive undirected and
+# somebody who recognises the corridor says later. Before this existed the
+# only way to label one was to delete it and upload it again.
+
+
+def test_a_photo_can_be_told_which_way_it_faces_after_it_was_uploaded(
+    client: TestClient,
+) -> None:
+    photo = upload(client).json()
+    assert photo["facing"] is None
+
+    response = client.patch(f"/photos/{photo['id']}", json={"facing": COURTYARD})
+
+    assert response.status_code == 200
+    assert response.json()["facing"] == COURTYARD
+    assert client.get(f"/photos?target_kind=edge&target_id={CORRIDOR}").json()[0][
+        "facing"
+    ] == COURTYARD
+
+
+def test_labelling_a_photo_is_what_makes_it_show_on_the_right_leg(
+    client: TestClient,
+) -> None:
+    """The point of the field, checked through the thing that reads it."""
+    photo = upload(client).json()
+    client.patch(f"/photos/{photo['id']}", json={"facing": COURTYARD})
+
+    walking_towards = client.get(
+        f"/photos?target_kind=edge&target_id={CORRIDOR}&facing={COURTYARD}"
+    )
+
+    assert [found["id"] for found in walking_towards.json()] == [photo["id"]]
+
+
+def test_a_photo_can_be_put_back_to_having_no_direction(client: TestClient) -> None:
+    """``None`` already means "leave it alone", so clearing needs its own word."""
+    photo = upload(client, facing=COURTYARD).json()
+
+    response = client.patch(f"/photos/{photo['id']}", json={"clear_facing": True})
+
+    assert response.status_code == 200
+    assert response.json()["facing"] is None
+
+
+def test_a_photo_cannot_be_told_to_face_a_place_that_does_not_exist(
+    client: TestClient,
+) -> None:
+    """Otherwise best_of silently never matches it and nobody finds out."""
+    photo = upload(client).json()
+
+    response = client.patch(f"/photos/{photo['id']}", json={"facing": "Nowhere_At_All"})
+
+    assert response.status_code == 404
+    assert client.get(f"/photos?target_kind=edge&target_id={CORRIDOR}").json()[0][
+        "facing"
+    ] is None
+
+
+def test_labelling_a_photo_leaves_everything_else_about_it_alone(
+    client: TestClient,
+) -> None:
+    photo = upload(client, caption="the long way round").json()
+
+    updated = client.patch(f"/photos/{photo['id']}", json={"facing": COURTYARD}).json()
+
+    assert updated["caption"] == "the long way round"
+    assert updated["target_id"] == photo["target_id"]
+    assert updated["uploaded_at"] == photo["uploaded_at"]
+    assert updated["size_bytes"] == photo["size_bytes"]
+
+
+def test_labelling_a_photo_that_is_not_there_is_a_404(client: TestClient) -> None:
+    assert client.patch("/photos/nosuchphoto", json={"facing": COURTYARD}).status_code == 404
+
+
+def test_a_photo_update_refuses_a_field_it_does_not_know(client: TestClient) -> None:
+    """extra="forbid", so a typo fails loudly instead of doing nothing."""
+    photo = upload(client).json()
+
+    assert client.patch(f"/photos/{photo['id']}", json={"facingg": COURTYARD}).status_code == 422

@@ -74,6 +74,7 @@ from shortcut.schemas import (
     PendingChange,
     PendingChanges,
     PhotoSummary,
+    PhotoUpdateRequest,
     ReportGroupSummary,
     ReportRequest,
     ReportSummary,
@@ -798,6 +799,44 @@ async def post_photo(
         ) from error
 
     return PhotoSummary.from_photo(photo)
+
+
+@app.patch(
+    "/photos/{photo_id}",
+    response_model=PhotoSummary,
+    summary="Change what is recorded about a photo",
+    responses={404: {"description": "No photo with that id."}},
+)
+def patch_photo(
+    photo_id: str,
+    changes: PhotoUpdateRequest,
+    photos: PhotoStore = Depends(get_photos),
+    graph: CampusGraph = Depends(get_graph),
+) -> PhotoSummary:
+    """Label a photo after the fact - above all, which way it faces.
+
+    The direction is checked against the map here rather than trusted, because
+    a photo facing a place that does not exist is one ``best_of`` will never
+    match and nobody will ever notice is broken.
+    """
+    if changes.facing is not None and changes.facing not in graph.nodes:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Unknown node id {changes.facing!r} to face.",
+        )
+
+    updated = photos.update_details(
+        photo_id,
+        caption=changes.caption,
+        location=changes.location,
+        facing=changes.facing,
+        clear_facing=changes.clear_facing,
+    )
+    if updated is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"No photo {photo_id!r}."
+        )
+    return PhotoSummary.from_photo(updated)
 
 
 @app.delete(

@@ -217,9 +217,25 @@ class PhotoStore:
         return photo
 
     def update_details(
-        self, photo_id: str, *, caption: str | None = None, location: str | None = None
+        self,
+        photo_id: str,
+        *,
+        caption: str | None = None,
+        location: str | None = None,
+        facing: str | None = None,
+        clear_facing: bool = False,
     ) -> Photo | None:
-        """Change a photo's wording without re-uploading the file."""
+        """Change what is recorded about a photo without re-uploading the file.
+
+        ``facing`` is here because a bulk upload cannot know it. A file named
+        ``photo_3_2026-09-03_13-41-36.jpg`` says nothing about which way the
+        camera pointed, so photos arrive undirected and somebody says later.
+        Without this the only way to label one was to delete it and upload it
+        again, which for a whole walk is not a thing anybody would do.
+
+        ``clear_facing`` exists because ``None`` already means "leave it
+        alone"; setting a photo back to undirected needs its own word.
+        """
         photos = self._read()
         for index, photo in enumerate(photos):
             if photo.id != photo_id:
@@ -228,6 +244,7 @@ class PhotoStore:
                 photo,
                 caption=photo.caption if caption is None else caption,
                 location=photo.location if location is None else location,
+                facing=None if clear_facing else (photo.facing if facing is None else facing),
             )
             photos[index] = updated
             self._write(photos)
