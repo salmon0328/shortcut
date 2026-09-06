@@ -453,6 +453,28 @@ textarea:focus-visible {
   margin-top: 0.75rem;
 }
 
+/* What was worked out about a floor, as readable facts. Deliberately not
+   .import-fields: there is nothing here to type into, and boxes would say
+   otherwise. */
+.import-facts {
+  margin-top: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+
+.import-fact {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0;
+  padding: 0.35rem 0;
+  font-size: 0.85rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.import-fact span {
+  color: var(--muted);
+}
+
 .import-field {
   display: block;
   margin: 0;

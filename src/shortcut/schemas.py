@@ -1130,7 +1130,13 @@ class ImportCandidate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: str = Field(description="Id of the candidate itself, for approving it.")
-    kind: Literal["node", "edge"]
+    kind: Literal["node", "edge", "floorplan"] = Field(
+        description=(
+            "A floorplan is the picture a floor is drawn on. Approving one "
+            "writes to the floorplan store rather than the map, since nothing "
+            "is routed over a picture."
+        )
+    )
     target_id: str = Field(description="The id it would take in the map.")
     label: str = Field(description="Readable name, for showing in a list.")
     fields: dict[str, Any] = Field(

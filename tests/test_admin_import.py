@@ -10,14 +10,17 @@ surveyed map and this machine's own state are never touched.
 
 from __future__ import annotations
 
+import shutil
 from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
-from shortcut.api import app, get_candidates, get_photos
+from shortcut.api import FLOORPLANS_DIR, app, get_candidates, get_photos
 from shortcut.candidate_store import CandidateStore
+from shortcut.floorplan_store import FloorplanStore
+from shortcut.import_source_store import ImportSourceStore
 from shortcut.photo_store import PhotoStore
 
 NODE_MAP = (
@@ -37,12 +40,22 @@ def queue(tmp_path: Path) -> CandidateStore:
 
 @pytest.fixture
 def client(tmp_path: Path, queue: CandidateStore) -> Iterator[TestClient]:
+    # A copy of the real plans, not the real plans. Approving a floorplan
+    # writes one, and a test that wrote into ``data/floorplans`` would leave a
+    # machine's own map quietly different from everybody else's. Copied rather
+    # than left empty because what the surveyed floors already have is what
+    # decides whether an uploaded place arrives with a position.
+    plans = tmp_path / "floorplans"
+    shutil.copytree(FLOORPLANS_DIR, plans)
+
     photos = PhotoStore(tmp_path / "photos")
     app.dependency_overrides[get_photos] = lambda: photos
     app.dependency_overrides[get_candidates] = lambda: queue
     with TestClient(app) as test_client:
         app.state.photos = photos
         app.state.candidates = queue
+        app.state.floorplans = FloorplanStore(plans)
+        app.state.import_sources = ImportSourceStore(tmp_path / "imports")
         app.state.overrides_path = tmp_path / "graph_overrides.json"
         yield test_client
     app.dependency_overrides.clear()
@@ -363,11 +376,17 @@ def test_a_skipped_candidate_says_why_and_stays_in_the_queue(
     assert body["remaining"] == len(candidates(client))
 
 
-def test_everything_reported_as_approved_really_is_on_the_map(
+def test_everything_reported_as_approved_really_is_there(
     client: TestClient, drawing_bytes: bytes
 ) -> None:
-    """The report has to match the map, especially when part of it failed."""
+    """The report has to match reality, especially when part of it failed.
+
+    Where "there" lands depends on the kind: a place or a link joins the map,
+    a floorplan joins the floorplan store, since nothing is routed over a
+    picture.
+    """
     upload(client, drawing_bytes)
+    kinds = {c["id"]: c["kind"] for c in candidates(client)}
     blocked = next(c for c in candidates(client) if c["kind"] == "edge" and c["blocked_by"])
     client.delete(f"/admin/import/candidates/{blocked['blocked_by'][0]}")
 
@@ -376,8 +395,16 @@ def test_everything_reported_as_approved_really_is_on_the_map(
     on_the_map = {node["id"] for node in client.get("/nodes").json()} | {
         edge["id"] for edge in client.get("/edges").json()
     }
+    stored_plans = {
+        (plan["building"], plan["floor"]) for plan in client.get("/floorplans").json()
+    }
+
     for result in body["approved"]:
-        assert result["target_id"] in on_the_map
+        if kinds[result["id"]] == "floorplan":
+            building, floor = result["target_id"].split("|")
+            assert (building, floor) in stored_plans
+        else:
+            assert result["target_id"] in on_the_map
 
 
 def test_approving_everything_leaves_a_map_that_still_loads(
@@ -401,6 +428,162 @@ def test_approving_something_that_is_not_waiting_is_a_404(client: TestClient) ->
     response = client.post("/admin/import/candidates/nosuch/approve")
 
     assert response.status_code == 404
+
+
+# --------------------------------------------------------------------------
+# Floorplans
+# --------------------------------------------------------------------------
+
+
+def plans_offered(client: TestClient) -> list[dict]:
+    return [c for c in candidates(client) if c["kind"] == "floorplan"]
+
+
+def test_a_drawing_offers_a_plan_for_the_floors_it_covers(
+    client: TestClient, drawing_bytes: bytes
+) -> None:
+    """The picture a floor is drawn on is as much a reading of the drawing as
+    the places on it, and it used to be the one thing only a script could
+    upload."""
+    upload(client, drawing_bytes)
+
+    assert plans_offered(client), "this drawing does contain floorplans"
+
+
+def test_a_floorplan_is_not_stored_until_it_is_approved(
+    client: TestClient, drawing_bytes: bytes
+) -> None:
+    before = client.get("/floorplans").json()
+
+    upload(client, drawing_bytes)
+
+    assert client.get("/floorplans").json() == before
+
+
+def test_approving_a_floorplan_stores_it_calibrated(
+    client: TestClient, drawing_bytes: bytes
+) -> None:
+    """A plan nobody has calibrated is a picture: the app knows the image
+    exists and still cannot say where on it a place is."""
+    upload(client, drawing_bytes)
+    plan = plans_offered(client)[0]
+    building, floor = plan["target_id"].split("|")
+
+    assert client.post(f"/admin/import/candidates/{plan['id']}/approve").status_code == 200
+
+    stored = next(
+        p
+        for p in client.get("/floorplans").json()
+        if (p["building"], p["floor"]) == (building, floor)
+    )
+    assert stored["is_calibrated"] is True
+    assert stored["metres_per_pixel"] > 0
+
+
+def test_a_floorplan_says_how_far_its_links_disagreed(
+    client: TestClient, drawing_bytes: bytes
+) -> None:
+    """A floor whose links disagree is a floor traced badly, and the number
+    saying so is worth more than the scale it produced."""
+    upload(client, drawing_bytes)
+
+    for plan in plans_offered(client):
+        assert plan["fields"]["links_used"] >= 3
+        assert "spread" in plan["fields"]
+        assert isinstance(plan["fields"]["well_conditioned"], bool)
+
+
+def test_a_floor_drawn_across_several_crops_is_offered_as_one_plan(
+    client: TestClient, drawing_bytes: bytes
+) -> None:
+    """SS B3 is three images on one page. One plan, or the places on two of
+    them have nowhere to be drawn."""
+    upload(client, drawing_bytes)
+
+    composed = [p for p in plans_offered(client) if p["fields"]["made_of"] > 1]
+    assert composed, "this drawing draws at least one floor across several crops"
+
+
+def test_approving_a_plan_places_the_places_still_waiting_on_it(
+    client: TestClient, queue: CandidateStore, drawing_bytes: bytes
+) -> None:
+    """The loop this closes: a place queued before its floor had a plan has
+    nothing to be measured against, so it waits with no position. Approving
+    the plan is the moment that answer exists - and without this the reviewer
+    would approve a floor of places that never appear on the map.
+
+    The waiting is arranged here rather than found in the drawing. This one
+    upload measures its own floors, so every place it queues on a floor with a
+    plan arrives placed already; a place waiting is what happens when the plan
+    turns up in a *later* upload than the place did, which is a two-drawing
+    story that this drawing cannot tell on its own.
+    """
+    upload(client, drawing_bytes)
+
+    plan = next(p for p in plans_offered(client) if p["target_id"] == "Hive|B4")
+    # A place the drawing does name, queued as an upload with no plan for its
+    # floor would have queued it: named, on the right floor, and nowhere.
+    waiting = queue.add_many(
+        [
+            {
+                "kind": "node",
+                "target_id": "Hive_B4_A",
+                "fields": {
+                    "name": "Hive B4 A",
+                    "building": "Hive",
+                    "floor": "B4",
+                    "x": None,
+                    "y": None,
+                },
+                "source": "an earlier drawing",
+            }
+        ]
+    )[0]
+
+    client.post(f"/admin/import/candidates/{plan['id']}/approve")
+
+    placed = next(c for c in candidates(client) if c["id"] == waiting.id)
+    assert placed["fields"]["x"] is not None
+    assert placed["fields"]["y"] is not None
+
+
+def test_approving_everything_does_plans_before_the_places_on_them(
+    client: TestClient, drawing_bytes: bytes
+) -> None:
+    """Otherwise a whole floor of places lands with no position at all.
+
+    Checked against the floors the drawing could actually scale: a floor it
+    refused to fit a scale for has no plan to place anything against, and its
+    places are meant to arrive unplaced.
+    """
+    upload(client, drawing_bytes)
+    scalable = {p["target_id"] for p in plans_offered(client)}
+    added = {
+        c["target_id"]: c["fields"]
+        for c in candidates(client)
+        if c["kind"] == "node"
+        and f"{c['fields'].get('building')}|{c['fields'].get('floor')}" in scalable
+    }
+    assert added, "sanity: some new places are on floors that do have a plan"
+
+    client.post("/admin/import/approve-all")
+
+    on_the_map = {node["id"]: node for node in client.get("/nodes").json()}
+    for node_id in added:
+        assert on_the_map[node_id]["x"] is not None, f"{node_id} landed with no position"
+
+
+def test_rejecting_a_floorplan_stores_nothing(
+    client: TestClient, drawing_bytes: bytes
+) -> None:
+    before = client.get("/floorplans").json()
+    upload(client, drawing_bytes)
+    plan = plans_offered(client)[0]
+
+    client.delete(f"/admin/import/candidates/{plan['id']}")
+
+    assert client.get("/floorplans").json() == before
+    assert plan["id"] not in {c["id"] for c in candidates(client)}
 
 
 # --------------------------------------------------------------------------

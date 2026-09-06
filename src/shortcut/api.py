@@ -58,10 +58,16 @@ from shortcut.overrides import (
     save_overrides,
     set_override,
 )
+from shortcut.floorplan_build import build_drafts
 from shortcut.floorplan_store import FloorplanStore, FloorplanStoreError
-from shortcut.nodemap import read_uploaded_pdf
+from shortcut.import_source_store import ImportSourceError, ImportSourceStore
+from shortcut.nodemap import node_id_for, read_uploaded_pdf
 from shortcut.photo_store import PhotoStore, PhotoStoreError
-from shortcut.survey_import import PlanCalibration, read_candidates
+from shortcut.survey_import import (
+    PlanCalibration,
+    _building_and_floor,
+    read_candidates,
+)
 from shortcut.report_store import (
     ROUTE_BLOCKING_CONDITIONS,
     ReportStatus,
@@ -138,6 +144,7 @@ CAMPUS_GRAPH_PATH = PROJECT_ROOT / "data" / "campus_graph.json"
 REPORTS_PATH = PROJECT_ROOT / "data" / "reports.json"
 GRAPH_OVERRIDES_PATH = PROJECT_ROOT / "data" / "graph_overrides.json"
 IMPORT_CANDIDATES_PATH = PROJECT_ROOT / "data" / "import_candidates.json"
+IMPORT_SOURCES_DIR = PROJECT_ROOT / "data" / "import_sources"
 PHOTOS_DIR = PROJECT_ROOT / "data" / "photos"
 FLOORPLANS_DIR = PROJECT_ROOT / "data" / "floorplans"
 
@@ -193,6 +200,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.reports = ReportStore(REPORTS_PATH)
     app.state.photos = PhotoStore(PHOTOS_DIR)
     app.state.candidates = CandidateStore(IMPORT_CANDIDATES_PATH)
+    app.state.import_sources = ImportSourceStore(IMPORT_SOURCES_DIR)
     app.state.floorplans = FloorplanStore(FLOORPLANS_DIR)
     app.state.overrides_path = GRAPH_OVERRIDES_PATH
     app.state.graph = _load_graph_with_overrides(GRAPH_OVERRIDES_PATH)
@@ -279,6 +287,17 @@ def get_candidates(request: Request) -> CandidateStore:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="The import queue is not ready yet. Try again shortly.",
+        )
+    return store
+
+
+def get_import_sources(request: Request) -> ImportSourceStore:
+    """Hand the store of uploaded drawings to an endpoint."""
+    store: ImportSourceStore | None = getattr(request.app.state, "import_sources", None)
+    if store is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="The import store is not ready yet. Try again shortly.",
         )
     return store
 
@@ -1704,6 +1723,13 @@ def _plan_calibrations(
 
 def _candidate_label(graph: CampusGraph, candidate: Candidate) -> str:
     """How to name a candidate in a list."""
+    if candidate.kind == "floorplan":
+        fields = candidate.fields
+        where = " · ".join(
+            part for part in (fields.get("building"), fields.get("floor")) if part
+        )
+        return f"Floorplan for {where}"
+
     if candidate.kind == "node":
         fields = candidate.fields
         where = " · ".join(part for part in (fields.get("building"), fields.get("floor")) if part)
@@ -1761,6 +1787,7 @@ async def post_admin_import(
     graph: CampusGraph = Depends(get_graph),
     candidates: CandidateStore = Depends(get_candidates),
     floorplans: FloorplanStore = Depends(get_floorplans_store),
+    sources: ImportSourceStore = Depends(get_import_sources),
 ) -> ImportSummary:
     """Read what the drawings say, and queue whatever the map does not have.
 
@@ -1790,6 +1817,61 @@ async def post_admin_import(
         reading = read_candidates(
             graph, extractions, filename=name, calibrations=calibrations
         )
+
+        # A floor's plan is composed from every crop the drawing puts it on,
+        # and measured from the links drawn across it. Kept as a draft the
+        # same way places and links are: it is a reading of a drawing, and a
+        # reading is something a person should see before it lands.
+        floor_of = {
+            node_id_for(place.name): _building_and_floor(place.name, extraction.floor)
+            for extraction in extractions
+            if extraction.floor
+            for place in extraction.places
+        }
+        drafts, plan_notes = build_drafts(
+            content,
+            extractions,
+            floor_of,
+            filename=name,
+            # Measured, not drawn. A review screen wants the numbers, and
+            # rasterising every floor on upload spends a second producing
+            # images most of which are about to be thrown away.
+            compose=False,
+            already_have={
+                (plan.building, plan.floor)
+                for plan in floorplans.all()
+                if plan.is_calibrated
+            },
+        )
+        unsettled.extend(plan_notes)
+
+        # The drawing itself is stored, not the images built from it: a
+        # megabyte of PNG per floor does not belong in the queue's JSON, and
+        # rebuilding from the PDF on approval gives the same plan every time.
+        source_id = sources.add(content) if drafts else None
+        for draft in drafts:
+            queued.append(
+                {
+                    "kind": "floorplan",
+                    "target_id": f"{draft.building}|{draft.floor}",
+                    "fields": {
+                        "building": draft.building,
+                        "floor": draft.floor,
+                        "source_id": source_id,
+                        "metres_per_pixel": draft.metres_per_pixel,
+                        "width_px": draft.width_px,
+                        "height_px": draft.height_px,
+                        "measures_m": list(draft.measures),
+                        "made_of": draft.made_of,
+                        "links_used": draft.links_used,
+                        "spread": round(draft.spread, 1),
+                        "well_conditioned": draft.well_conditioned,
+                        "replaces_existing": draft.replaces_existing,
+                    },
+                    "source": draft.source,
+                }
+            )
+        found += len(drafts)
         filenames.append(name)
         unsettled.extend(reading.unsettled)
         already_known += reading.already_known_nodes + reading.already_known_edges
@@ -1922,6 +2004,87 @@ def approve_import_candidate(
     )
 
 
+def _approve_floorplan(request: Request, candidate: Candidate) -> None:
+    """Rebuild one floor's plan from the drawing it was read from, and store it.
+
+    Rebuilt rather than carried through the queue: the image is about a
+    megabyte, the queue is a JSON file somebody opens to see what is waiting,
+    and the build is deterministic, so the plan approved is the plan reviewed.
+    """
+    sources: ImportSourceStore = request.app.state.import_sources
+    floorplans: FloorplanStore = request.app.state.floorplans
+    fields = candidate.fields
+
+    try:
+        pdf = sources.read(fields["source_id"])
+    except ImportSourceError as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(error)
+        ) from error
+
+    extractions = read_uploaded_pdf(pdf)
+    floor_of = {
+        node_id_for(place.name): _building_and_floor(place.name, extraction.floor)
+        for extraction in extractions
+        if extraction.floor
+        for place in extraction.places
+    }
+    drafts, _ = build_drafts(pdf, extractions, floor_of)
+
+    wanted = (fields["building"], fields["floor"])
+    draft = next(
+        (d for d in drafts if (d.building, d.floor) == wanted),
+        None,
+    )
+    if draft is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"The drawing no longer yields a plan for {' '.join(wanted).strip()}. "
+                "Upload it again to see what it says now."
+            ),
+        )
+
+    # Added, never edited in place. A plan already stored keeps its id and its
+    # calibration, so a route drawn a moment ago still resolves; `for_floor`
+    # takes the newest, which is what makes this a replacement.
+    stored = floorplans.add(
+        content=draft.image,
+        content_type=draft.content_type,
+        building=draft.building,
+        floor=draft.floor,
+        origin_x_m=draft.origin_x_m,
+        origin_y_m=draft.origin_y_m,
+        metres_per_pixel=draft.metres_per_pixel,
+        note=(
+            f"Composed from {draft.made_of} crop(s) of {candidate.source}. "
+            f"Scale fitted from {draft.links_used} links, spread "
+            f"{draft.spread:.1f}x."
+        ),
+    )
+    logger.info(
+        "Stored floorplan %s for %s %s", stored.id, draft.building, draft.floor
+    )
+
+    # Places queued before this plan existed had nowhere to be measured
+    # against, so they are waiting with no position. The draft worked out
+    # where every one of them lands while it was fitting the scale, so the
+    # answer is already here - and without this the reviewer would approve a
+    # floor of places that never appear on the map they just approved.
+    store: CandidateStore = request.app.state.candidates
+    placed = 0
+    for candidate in store.all():
+        if candidate.kind != "node" or candidate.fields.get("x") is not None:
+            continue
+        at = draft.places.get(candidate.target_id)
+        if at is None:
+            continue
+        store.replace_fields(candidate.id, {"x": at[0], "y": at[1]})
+        placed += 1
+    if placed:
+        logger.info("Gave %s waiting place(s) a position from that plan", placed)
+
+
 def _approve_one(
     request: Request,
     graph: CampusGraph,
@@ -1929,6 +2092,13 @@ def _approve_one(
     candidates: CandidateStore,
 ) -> CampusGraph:
     """Write one candidate into the overrides file, or say why it cannot be."""
+    if candidate.kind == "floorplan":
+        # Nothing routes over a picture, so this touches the floorplan store
+        # rather than the overrides file and leaves the graph exactly as it
+        # was - which is why it hands back the graph it was given.
+        _approve_floorplan(request, candidate)
+        return graph
+
     if candidate.kind == "edge":
         missing = [
             end
@@ -1978,10 +2148,16 @@ def approve_all_import_candidates(
     and asking a reviewer to work that out for themselves would make the
     button useless on any real drawing.
     """
+    # Floorplans, then places, then links. Each needs the one before it: a
+    # link needs both its places to exist, and a place gets its position from
+    # the floor's plan, so approving in any other order leaves work undone
+    # that the reviewer would have to notice for themselves.
     waiting = candidates.all()
-    ordered = [c for c in waiting if c.kind == "node"] + [
-        c for c in waiting if c.kind == "edge"
-    ]
+    ordered = (
+        [c for c in waiting if c.kind == "floorplan"]
+        + [c for c in waiting if c.kind == "node"]
+        + [c for c in waiting if c.kind == "edge"]
+    )
 
     approved: list[CandidateReviewResult] = []
     skipped: list[SkippedCandidate] = []

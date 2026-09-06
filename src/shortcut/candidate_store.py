@@ -32,7 +32,11 @@ __all__ = [
     "CandidateStoreError",
 ]
 
-CandidateKind = Literal["node", "edge"]
+#: What a candidate can be. A floorplan is not part of the routing graph -
+#: nothing is routed over a picture - so approving one writes to the floorplan
+#: store rather than to the overrides file. It shares this queue because it
+#: comes out of the same upload and wants the same review.
+CandidateKind = Literal["node", "edge", "floorplan"]
 
 
 class CandidateStoreError(Exception):
