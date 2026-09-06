@@ -62,9 +62,22 @@ _FILLER = re.compile(
 )
 
 _RAIN = re.compile(r"\b(?:rain|raining|wet|drizzl|pour|downpour|dry|shelter)", re.I)
+# A *hard* shelter requirement, as opposed to _RAIN, which only says the
+# weather came up. The difference decides whether shelter becomes a filter
+# that rules routes out or a preference that merely prices them, so the
+# wordings people actually use for the strong version all have to land here:
+# "must be sheltered" is a requirement in anyone's reading of it, and matching
+# only "must stay dry" left it as a mere preference.
 _MUST_STAY_DRY = re.compile(
     r"\b(?:can'?t|cannot|must not|mustn'?t)\s+get\s+wet"
-    r"|\bmust\s+(?:stay|keep)\s+dry\b",
+    r"|\bmust\s+(?:stay|keep)\s+dry\b"
+    # "must be sheltered", "needs to be covered", "has to be indoors"
+    r"|\b(?:must|need(?:s)?\s+to|has\s+to|have\s+to|got\s+to)\s+be\s+"
+    r"(?:sheltered|covered|indoors?|dry|under\s+cover)\b"
+    # "sheltered only", "covered route only"
+    r"|\b(?:sheltered|covered)\s+(?:\w+\s+)?only\b"
+    r"|\bstay\s+(?:indoors?|inside|under\s+cover|dry)\b"
+    r"|\bkeep\s+me\s+dry\b",
     re.I,
 )
 _NO_STAIRS = re.compile(

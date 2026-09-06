@@ -113,6 +113,20 @@ def _score(node: Node, query: str) -> tuple[float, str]:
         return 0.80, "name starts with what you typed"
     if query in name:
         return 0.60, "name contains what you typed"
+
+    # Every word matched, in any order, across the name, building and floor.
+    # The picker labels places "Lift Lobby (Hive · B4)", so somebody typing
+    # "Hive B4 Lift Lobby" is repeating what the app itself taught them - and
+    # every ordered check above misses it, because no single field holds that
+    # whole string. It is also the only way to name one of two places that
+    # share a name without knowing its id.
+    #
+    # Multi-word queries only: for a single word the tiers above have already
+    # said everything there is to say, and this would just promote weak hits.
+    words = query.split()
+    if len(words) > 1 and all(word in everything for word in words):
+        return 0.55, "matches the place, building and floor you named"
+
     if query in everything:
         return 0.40, "matches the building, floor or id"
 

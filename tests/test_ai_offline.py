@@ -100,6 +100,34 @@ def test_a_wish_to_stay_dry_is_not_a_requirement() -> None:
     assert read_intent("a to b, I can't get wet").wants_shelter is True
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "a to b, must be sheltered",
+        "a to b, it needs to be covered",
+        "a to b, has to be indoors",
+        "a to b, sheltered corridors only",
+        "a to b, I need to stay under cover",
+    ],
+)
+def test_the_ways_people_insist_on_shelter(text: str) -> None:
+    """All of these are requirements, and reading one as a mere preference
+    is the difference between ruling a wet route out and merely pricing it."""
+    assert read_intent(text).wants_shelter is True
+
+
+def test_insisting_on_shelter_and_refusing_stairs_keeps_both() -> None:
+    """Only one of them can be *the* preference, so the other has to be a filter.
+
+    Shelter becomes the hard requirement and the lift becomes what the search
+    optimises for, which is how both survive a single-valued preference field.
+    """
+    intent = read_intent("a to b, must be sheltered and no stairs")
+
+    assert intent.wants_shelter is True
+    assert intent.avoid_stairs is True
+
+
 def test_a_time_budget_is_picked_up() -> None:
     assert read_intent("a to b, I have 10 minutes").max_minutes == 10
 

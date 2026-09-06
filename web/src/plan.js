@@ -6,8 +6,14 @@
 // because they show the same route, and the summary is the way in to the
 // steps.
 
-import { photoUrl, requestRoute, requestRouteOptions } from "./api.js";
-import { nodeLabel, nodeName } from "./data.js";
+import {
+  aiAvailable,
+  parseSentence,
+  photoUrl,
+  requestRoute,
+  requestRouteOptions,
+} from "./api.js";
+import { getNodes, nodeLabel, nodeName } from "./data.js";
 import { createSearchBox } from "./searchBox.js";
 import { showEmptyMap, showRouteOnMap } from "./mapView.js";
 
@@ -42,6 +48,13 @@ const stepProgress = document.querySelector("#step-progress");
 const backButton = document.querySelector("#back-button");
 const nextButton = document.querySelector("#next-button");
 const finishButton = document.querySelector("#finish-button");
+
+// The plain-language box.
+const ask = document.querySelector("#ask");
+const askInput = document.querySelector("#ask-input");
+const askButton = document.querySelector("#ask-button");
+const askStatus = document.querySelector("#ask-status");
+const askChoices = document.querySelector("#ask-choices");
 
 const originBox = createSearchBox(
   document.querySelector("#origin-input"),
@@ -255,6 +268,8 @@ export function resetPlan() {
   stepsList.replaceChildren();
   nextButton.hidden = false;
   finishButton.hidden = true;
+  askInput.value = "";
+  clearAsk();
   clearOutput();
   showEmptyMap();
 }
@@ -441,6 +456,196 @@ form.addEventListener("submit", (event) => {
   }
 
   findRoute(origin, destination);
+});
+
+// --------------------------------------------------------------------------
+// Saying it in a sentence
+// --------------------------------------------------------------------------
+//
+// This box is a front end to the two pickers, not a second way to route. A
+// sentence is read into the same RouteRequest the pickers build, the controls
+// are set to show what was understood, and the ordinary route call runs. So
+// nothing the sentence decided is hidden, and all of it can be corrected by
+// hand afterwards.
+
+function setAskStatus(text, kind = "") {
+  askStatus.textContent = text;
+  askStatus.className = kind ? `ask-status ${kind}` : "ask-status";
+  askStatus.hidden = !text;
+}
+
+function clearAsk() {
+  setAskStatus("");
+  askChoices.replaceChildren();
+  askChoices.hidden = true;
+}
+
+/** Put a resolved place into one of the pickers, by its node id. */
+function fillBox(box, nodeId) {
+  const node = getNodes().find((candidate) => candidate.id === nodeId);
+  if (node) box.select(node);
+  return Boolean(node);
+}
+
+/**
+ * Show what was understood on the controls themselves.
+ *
+ * Applied on every answer, not only the ones that produced a route. "Take me
+ * to the lift lobby, I can't use stairs" is a question about the lift lobby
+ * *and* a refusal of stairs, and the refusal has to be on screen before the
+ * question is answered - otherwise answering it walks the student up a
+ * staircase they have just ruled out.
+ */
+function applyToControls(preferences) {
+  const chip = form.querySelector(
+    `input[name="preference"][value="${preferences.preference}"]`
+  );
+  if (chip) chip.checked = true;
+  allowStairsCheckbox.checked = preferences.allow_stairs;
+  allowLiftCheckbox.checked = preferences.allow_lift;
+  allowShuttleCheckbox.checked = preferences.allow_shuttle;
+  shelteredOnlyCheckbox.checked = preferences.sheltered_only;
+}
+
+/**
+ * Which end the backend's question is about.
+ *
+ * The same precedence as `_first_question` in shortcut/ai/parser.py:
+ * destination first, because that is the half people leave vague. Guessing
+ * differently here would offer the choices for one end under a question about
+ * the other - and both ends can be ambiguous at once, so that is a real risk
+ * rather than a theoretical one.
+ */
+function endInQuestion(result) {
+  const askedAboutDestination =
+    result.destination.ambiguous || result.destination.resolved === null;
+  return askedAboutDestination ? "destination" : "origin";
+}
+
+const boxFor = (endName) => (endName === "origin" ? originBox : destinationBox);
+
+/**
+ * Ask about one end, and keep asking until both are settled.
+ *
+ * A sentence can be vague at both ends - "take me to the lift lobby from
+ * staircase 1" is ambiguous twice over. The backend deliberately asks one
+ * question at a time, so answering the first has to raise the second here
+ * rather than leaving an empty box and no prompt.
+ *
+ * Re-parsing instead would be the obvious move and the wrong one: the
+ * sentence has not changed, so it would come back just as ambiguous.
+ */
+function askAbout(result, endName, question) {
+  const choice = result[endName];
+  const box = boxFor(endName);
+
+  setAskStatus(question, "asking");
+  askChoices.replaceChildren();
+
+  for (const candidate of choice.alternatives) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "ask-choice";
+    button.textContent = `${candidate.name} (${candidate.building} · ${candidate.floor})`;
+    button.addEventListener("click", () => {
+      fillBox(box, candidate.node_id);
+      advance(result);
+    });
+    askChoices.appendChild(button);
+  }
+
+  askChoices.hidden = choice.alternatives.length === 0;
+  // Nothing to choose from means the place is not on the map at all, so the
+  // picker beneath is the only way forward.
+  if (choice.alternatives.length === 0) box.focus();
+}
+
+/** Route if both ends are settled, otherwise ask about the one that is not. */
+function advance(result) {
+  const origin = originBox.selectedId();
+  const destination = destinationBox.selectedId();
+
+  if (origin && destination) {
+    clearAsk();
+    // Everything the sentence said about preferences is already on the
+    // controls, so running what the screen shows is running what was asked.
+    findRoute(origin, destination);
+    return;
+  }
+
+  const endName = origin ? "destination" : "origin";
+  const choice = result[endName];
+  const where = endName === "origin" ? "starting point" : "destination";
+
+  askAbout(
+    result,
+    endName,
+    choice.alternatives.length > 0
+      ? `And which ${choice.phrase || where} did you mean?`
+      : `Now pick your ${where} below.`
+  );
+}
+
+async function runAsk() {
+  const text = askInput.value.trim();
+  if (!text) return;
+
+  clearAsk();
+  clearOutput();
+  askButton.disabled = true;
+  setAskStatus("Reading that…");
+
+  // Sent only when both places are already chosen, because a RouteRequest
+  // cannot be built without them. It carries the preferences, so a sentence
+  // that says nothing about stairs leaves the toggle alone - and when it is
+  // not sent, the controls below still show whatever came back.
+  const origin = originBox.selectedId();
+  const destination = destinationBox.selectedId();
+  const current =
+    origin && destination ? { origin, destination, ...currentOptions() } : null;
+
+  try {
+    const result = await parseSentence(text, current);
+
+    // Whatever it did work out goes onto the screen, even when the other end
+    // is still a question: half an answer is still progress worth keeping,
+    // and the preferences have to be showing before any question is answered.
+    applyToControls(result.preferences);
+    if (result.origin.resolved) fillBox(originBox, result.origin.resolved.node_id);
+    if (result.destination.resolved) {
+      fillBox(destinationBox, result.destination.resolved.node_id);
+    }
+
+    if (result.request) {
+      clearAsk();
+      findRoute(result.request.origin, result.request.destination);
+      return;
+    }
+
+    askAbout(
+      result,
+      endInQuestion(result),
+      result.question ?? "Which place did you mean?"
+    );
+  } catch (error) {
+    setAskStatus(error.message, "error");
+  } finally {
+    askButton.disabled = false;
+  }
+}
+
+askButton.addEventListener("click", runAsk);
+
+askInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault(); // the box is outside the form; do not submit it
+    runAsk();
+  }
+});
+
+// Hidden unless the backend actually has the AI routes mounted.
+aiAvailable().then((available) => {
+  ask.hidden = !available;
 });
 
 backButton.addEventListener("click", () => {

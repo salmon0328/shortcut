@@ -23,6 +23,7 @@ __all__ = [
     "ParsedIntent",
     "PlaceCandidate",
     "PlaceChoice",
+    "RoutePreferences",
 ]
 
 
@@ -121,6 +122,26 @@ class PlaceChoice(Strict):
     reason: str = ""
 
 
+class RoutePreferences(Strict):
+    """How the route should be scored, once the sentence and the controls agree.
+
+    Everything a :class:`~shortcut.schemas.RouteRequest` carries except the two
+    places, so it can be reported even when there is no request to build.
+
+    That case is the reason this exists. "Take me to the lift lobby, I can't
+    use stairs" is ambiguous about the lift lobby, so no request is built - and
+    without this the refusal of stairs would be read, dropped on the floor, and
+    the route the student finally picks would send them up a staircase they
+    have just said they cannot climb.
+    """
+
+    preference: RoutePreference = "fastest"
+    allow_stairs: bool = True
+    allow_lift: bool = True
+    allow_shuttle: bool = True
+    sheltered_only: bool = False
+
+
 class ParseResult(Strict):
     """A sentence, turned into something the deterministic router can run.
 
@@ -128,9 +149,13 @@ class ParseResult(Strict):
     when both ends resolved. That is deliberate: it means the plain-language
     path hands the existing endpoint exactly what the dropdown path does, and
     every validation rule already written applies unchanged.
+
+    ``preferences`` is always present, and carries the same choices for the
+    times when ``request`` is ``None``.
     """
 
     request: RouteRequest | None = None
+    preferences: RoutePreferences = Field(default_factory=RoutePreferences)
     origin: PlaceChoice
     destination: PlaceChoice
     needs_clarification: bool = False
