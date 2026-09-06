@@ -8,6 +8,7 @@ import "./style.css";
 
 import { refreshQueue } from "./admin.js";
 import { refreshMapEditor } from "./adminMap.js";
+import { refresh as refreshImport } from "./importReview.js";
 import { loadReferenceData } from "./data.js";
 import { refreshPending } from "./pending.js";
 import {
@@ -103,6 +104,7 @@ const adminTabs = {
   "add-place": document.querySelector("#admin-tab-add-place"),
   "add-link": document.querySelector("#admin-tab-add-link"),
   edit: document.querySelector("#admin-tab-edit"),
+  import: document.querySelector("#admin-tab-import"),
   pending: document.querySelector("#admin-tab-pending"),
 };
 
@@ -119,6 +121,8 @@ function showAdminTab(name) {
     refreshQueue();
   } else if (name === "pending") {
     refreshPending();
+  } else if (name === "import") {
+    refreshImport();
   } else {
     refreshMapEditor();
   }

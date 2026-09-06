@@ -48,6 +48,7 @@ __all__ = [
     "extract_page",
     "node_id_for",
     "read_node_map",
+    "read_uploaded_pdf",
 ]
 
 
@@ -398,6 +399,37 @@ def read_node_map(
     """Read every surveyed page of the node map."""
     with pymupdf.open(path) as document:
         return tuple(extract_page(document, page) for page in pages)
+
+
+def read_uploaded_pdf(content: bytes) -> tuple[Extraction, ...]:
+    """Read a drawing somebody has just uploaded, without knowing its shape.
+
+    Two things differ from :func:`read_node_map`, and both come from not
+    having seen the file before.
+
+    **Every page is read**, because :data:`SURVEY_PAGES` describes one
+    particular file - the pages of *this* team's node map that supersede the
+    earlier redraw - and says nothing about a drawing nobody has looked at
+    yet. Guessing a page range for an unknown file would silently drop
+    whichever floors happened to fall outside it.
+
+    **A page with nothing on it is skipped rather than fatal.** A title page
+    or a legend has no place markers, and refusing the whole upload because
+    page one is a cover sheet would reject most real documents.
+
+    Reading everything means an older page can offer a place that contradicts
+    a newer one. That is not resolved here, and deliberately so: this returns
+    candidates for a person to accept or reject, and the reviewer is the one
+    who knows which page is current.
+    """
+    extractions: list[Extraction] = []
+    with pymupdf.open(stream=content, filetype="pdf") as document:
+        for number in range(document.page_count):
+            try:
+                extractions.append(extract_page(document, number))
+            except ValueError:
+                continue  # no place markers on this page: not a survey page
+    return tuple(extractions)
 
 
 def metres_for(seconds: int) -> float:

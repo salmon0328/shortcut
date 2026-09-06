@@ -40,6 +40,17 @@ def stay_on_local_disk(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
 
     monkeypatch.setattr(api, "DOTENV_PATH", tmp_path / "no-such.env")
 
+    # The same problem one layer down. A test can point app.state at its own
+    # overrides file, but only after the lifespan has already run and built
+    # the graph from the real one - so a developer who has approved anything
+    # locally gets a different map under the suite than CI does, and tests
+    # start passing or failing on state nobody wrote deliberately. Patching
+    # the module constant moves the isolation to before startup, where it has
+    # to be.
+    monkeypatch.setattr(
+        api, "GRAPH_OVERRIDES_PATH", tmp_path / "graph_overrides.json"
+    )
+
 
 @pytest.fixture(scope="session")
 def graph_path() -> Path:

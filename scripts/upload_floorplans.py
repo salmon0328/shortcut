@@ -36,7 +36,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import import_survey  # noqa: E402
-import nodemap  # noqa: E402
+from shortcut import nodemap  # noqa: E402
 from shortcut.dotenv import load_dotenv  # noqa: E402
 from shortcut.floorplan_store import FloorplanStore  # noqa: E402
 
