@@ -1259,6 +1259,20 @@ textarea:focus-visible {
    Report
    ========================================================================== */
 
+/* Off-screen rather than display:none, so the file input still takes keyboard
+   focus and still announces itself. The label around it is the visible
+   control. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .photo-box {
   display: flex;
   flex-direction: column;
@@ -1271,10 +1285,49 @@ textarea:focus-visible {
   background: var(--page);
   border: 1px dashed #c9cedb;
   border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.photo-box:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* The input is off-screen, so its focus ring has to be drawn on the label. */
+.photo-box:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .photo-box-icon {
   color: #b3b8c8;
+}
+
+.photo-box:hover .photo-box-icon {
+  color: var(--accent);
+}
+
+/* What is about to be sent, shown before it is. A reporter who framed the
+   wrong wall should find that out here rather than never. */
+.photo-preview {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  margin-bottom: 0.875rem;
+}
+
+.photo-preview img {
+  flex: 1;
+  min-width: 0;
+  max-height: 11rem;
+  object-fit: cover;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+}
+
+.photo-preview button {
+  flex-shrink: 0;
+  margin: 0;
 }
 
 .condition-grid {
@@ -1501,6 +1554,36 @@ textarea:focus-visible {
   color: #b3b8c8;
   background: var(--page);
   border: 1px dashed var(--line);
+}
+
+/* A picture of the problem and a picture of the place look alike and mean
+   very different things, so the thumbnail says which it is. */
+.report-thumb-holder {
+  position: relative;
+  width: 5.5rem;
+}
+
+.thumb-tag {
+  position: absolute;
+  left: 0.25rem;
+  bottom: 0.25rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.thumb-tag.evidence {
+  color: var(--card);
+  background: var(--danger);
+}
+
+.thumb-tag.place {
+  color: var(--muted);
+  background: var(--card);
+  border: 1px solid var(--line);
 }
 
 .report-body {

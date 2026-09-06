@@ -588,6 +588,64 @@ def _require_known_target(
 
 
 @app.post(
+    "/reports/photo",
+    response_model=PhotoSummary,
+    status_code=status.HTTP_201_CREATED,
+    summary="Upload a photo of a problem, to file with a report",
+)
+async def post_report_photo(
+    file: UploadFile = File(description="A picture of the problem."),
+    target_kind: str = Form(description="Either 'node' or 'edge'."),
+    target_id: str = Form(description="Which place or link the problem is at."),
+    graph: CampusGraph = Depends(get_graph),
+    photos: PhotoStore = Depends(get_photos),
+) -> PhotoSummary:
+    """Store one photograph as evidence, and hand back its id.
+
+    Separate from ``POST /photos`` on purpose, and stored with
+    ``kind="report"``: the photos that endpoint takes are pictures of the
+    building, shown to people as directions while they walk. This is a picture
+    of a flooded stairwell. Serving one as the other would be worse than
+    showing nothing, and it would go on being wrong long after the water dried.
+
+    Deliberately its own step rather than a file on ``POST /reports``. That
+    keeps the report endpoint plain JSON, which is what every existing caller
+    and every test already sends, and it means a photo that fails to upload
+    costs the reporter the photo rather than the whole report.
+
+    No ``facing``: somebody photographing a blocked corridor is recording what
+    is in front of them, not which way they were walking, and asking would be
+    asking the wrong question at the wrong moment.
+    """
+    if target_kind not in ("node", "edge"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="target_kind must be 'node' or 'edge'.",
+        )
+    _require_known_target(graph, target_kind, target_id)
+
+    anchor = _photo_anchor(graph, target_kind, target_id)
+    try:
+        photo = photos.add(
+            content=await file.read(),
+            content_type=file.content_type or "",
+            target_kind=target_kind,
+            target_id=target_id,
+            building=anchor.building,
+            floor=anchor.floor,
+            location=_describe_target(graph, target_kind, target_id),
+            facing=None,
+            kind="report",
+        )
+    except PhotoStoreError as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)
+        ) from error
+
+    return PhotoSummary.from_photo(photo)
+
+
+@app.post(
     "/reports",
     response_model=ReportSummary,
     status_code=status.HTTP_201_CREATED,
@@ -597,6 +655,7 @@ def post_report(
     report_request: ReportRequest,
     graph: CampusGraph = Depends(get_graph),
     reports: ReportStore = Depends(get_reports),
+    photos: PhotoStore = Depends(get_photos),
 ) -> ReportSummary:
     """Record one report. It is stored pending, and changes nothing yet.
 
@@ -607,11 +666,24 @@ def post_report(
         graph, report_request.target_kind, report_request.target_id
     )
 
+    # Checked rather than trusted. An id that names nothing would leave the
+    # queue showing a broken image where the reviewer expects the evidence,
+    # which reads as a bug in the queue rather than a bad submission.
+    if report_request.photo_id and photos.get(report_request.photo_id) is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                f"No photo {report_request.photo_id!r}. Upload it to "
+                "POST /reports/photo first, then send the id it returns."
+            ),
+        )
+
     report = reports.add(
         target_kind=report_request.target_kind,
         target_id=report_request.target_id,
         condition=report_request.condition,
         notes=report_request.notes,
+        photo_id=report_request.photo_id,
     )
     return ReportSummary.from_report(report)
 

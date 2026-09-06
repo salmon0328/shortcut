@@ -114,6 +114,22 @@ export async function fetchFloorplan(building, floor) {
   return Array.isArray(found) && found.length > 0 ? found[0] : null;
 }
 export const submitReport = (payload) => postJson("/reports", payload);
+
+/**
+ * Upload a photo of a problem, and get back the id to file with the report.
+ *
+ * Its own call rather than a field on the report, which is what lets a failed
+ * upload cost the reporter their photo instead of their whole report. Stored
+ * apart from the building's own photos too: this is evidence of a problem at
+ * a moment, and it must never be served to somebody as a direction.
+ */
+export function uploadReportPhoto(file, targetKind, targetId) {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("target_kind", targetKind);
+  form.append("target_id", targetId);
+  return request("/reports/photo", { method: "POST", body: form });
+}
 export const fetchReportGroups = () => request("/reports/groups");
 
 /** Everything sitting in the overrides file, not yet folded into the survey. */

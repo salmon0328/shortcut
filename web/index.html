@@ -263,16 +263,31 @@
             <select id="report-where"></select>
           </div>
 
-          <!-- Reports do not carry photos yet: the backend has no way to
-               attach one to a report. The box is here so the layout matches
-               the design and the space is ready. -->
-          <div class="photo-box" aria-hidden="true">
-            <svg class="photo-box-icon" viewBox="0 0 24 24" width="40" height="40">
-              <rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.6" />
-              <circle cx="8.5" cy="10" r="1.6" fill="currentColor" />
-              <path d="M5 17l4.5-4.5 3 3 2.5-2.5L19 17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
-            </svg>
-            <span>Photo upload coming soon</span>
+          <!-- Optional on purpose. Somebody standing in a blocked corridor
+               with somewhere to be should be able to file the report in three
+               taps; the photo is worth asking for, never worth requiring. -->
+          <div class="field">
+            <label class="photo-box" for="report-photo">
+              <input
+                type="file"
+                id="report-photo"
+                accept="image/jpeg,image/png,image/webp"
+                capture="environment"
+                class="visually-hidden"
+              />
+              <svg class="photo-box-icon" viewBox="0 0 24 24" width="40" height="40" aria-hidden="true">
+                <rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.6" />
+                <circle cx="8.5" cy="10" r="1.6" fill="currentColor" />
+                <path d="M5 17l4.5-4.5 3 3 2.5-2.5L19 17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
+              </svg>
+              <span id="report-photo-label">Add a photo (optional)</span>
+            </label>
+            <div id="report-photo-preview" class="photo-preview" hidden>
+              <img id="report-photo-image" alt="The photo you are about to send" />
+              <button type="button" id="report-photo-remove" class="secondary small">
+                Remove
+              </button>
+            </div>
           </div>
 
           <fieldset class="chips condition-chips">

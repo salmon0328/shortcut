@@ -29,12 +29,26 @@ __all__ = [
     "ALLOWED_CONTENT_TYPES",
     "MAX_PHOTO_BYTES",
     "Photo",
+    "PhotoKind",
     "PhotoStore",
     "PhotoStoreError",
     "PhotoTargetKind",
 ]
 
 PhotoTargetKind = Literal["node", "edge"]
+
+#: What a photo is for, which decides where it may appear.
+#:
+#: A **place** photo says what somewhere looks like, and the turn-by-turn
+#: screen shows it as a direction. A **report** photo is evidence of a problem
+#: at a moment - a hoarded corridor, water across a stairwell - and belongs
+#: only beside the report it came with.
+#:
+#: They are kept apart because mixing them is actively harmful rather than
+#: merely untidy: a photograph of a flooded stairwell served as "this is the
+#: way you are walking" is worse than showing no picture at all, and it would
+#: outlive the flood by however long nobody noticed.
+PhotoKind = Literal["place", "report"]
 
 # Only ordinary photograph formats. Anything else is refused rather than
 # stored, since these files are served straight back to browsers.
@@ -78,6 +92,9 @@ class Photo:
     size_bytes: int
     uploaded_at: str
     caption: str = ""
+    #: Defaulted, so every photo uploaded before reports could carry one
+    #: still reads back as what it is: a picture of a place.
+    kind: PhotoKind = "place"
 
 
 class PhotoStore:
@@ -101,17 +118,34 @@ class PhotoStore:
         return None
 
     def for_target(
-        self, target_kind: str, target_id: str, facing: str | None = None
+        self,
+        target_kind: str,
+        target_id: str,
+        facing: str | None = None,
+        kind: PhotoKind | None = "place",
     ) -> list[Photo]:
-        """Photos of one node or edge, optionally only those facing one way."""
+        """Photos of one node or edge, optionally only those facing one way.
+
+        ``kind`` defaults to ``"place"`` rather than to everything, because
+        every caller that existed before reports could carry photos wanted
+        pictures of the building and would now silently be handed evidence of
+        a problem alongside them. Pass ``None`` to mean "both".
+        """
         matches = [
             photo
             for photo in self._read()
-            if photo.target_kind == target_kind and photo.target_id == target_id
+            if photo.target_kind == target_kind
+            and photo.target_id == target_id
+            and (kind is None or photo.kind == kind)
         ]
         if facing is None:
             return matches
         return [photo for photo in matches if photo.facing == facing]
+
+    def for_report(self, report_photo_ids: list[str]) -> list[Photo]:
+        """The photos filed with a group of reports, in the order given."""
+        by_id = {photo.id: photo for photo in self._read()}
+        return [by_id[pid] for pid in report_photo_ids if pid in by_id]
 
     def find_best(
         self, target_kind: str, target_id: str, facing: str | None
@@ -136,10 +170,15 @@ class PhotoStore:
         against S3. Reading the index once and reusing it here is what keeps a
         multi-step route to a single fetch instead of one per step.
         """
+        # Place photos only. A picture of the flood is not a picture of the
+        # way you are walking, and serving it as one would be worse than
+        # showing nothing - see PhotoKind.
         matches = [
             photo
             for photo in photos
-            if photo.target_kind == target_kind and photo.target_id == target_id
+            if photo.target_kind == target_kind
+            and photo.target_id == target_id
+            and photo.kind == "place"
         ]
         if facing is not None:
             facing_matches = [photo for photo in matches if photo.facing == facing]
@@ -172,6 +211,7 @@ class PhotoStore:
         location: str,
         facing: str | None = None,
         caption: str = "",
+        kind: PhotoKind = "place",
     ) -> Photo:
         """Store one photo and record where it was taken.
 
@@ -207,6 +247,7 @@ class PhotoStore:
             size_bytes=len(content),
             uploaded_at=_now(),
             caption=caption,
+            kind=kind,
         )
 
         self._save_file(photo.filename, content)
@@ -322,6 +363,7 @@ class PhotoStore:
                 size_bytes=entry.get("size_bytes", 0),
                 uploaded_at=entry["uploaded_at"],
                 caption=entry.get("caption", ""),
+                kind=entry.get("kind", "place"),
             )
         except KeyError as error:
             raise PhotoStoreError(
