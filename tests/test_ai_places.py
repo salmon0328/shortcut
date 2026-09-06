@@ -141,6 +141,34 @@ def test_two_places_of_the_same_name_are_not_guessed_between(
     }
 
 
+def test_naming_the_floor_settles_a_name_two_places_share(
+    graph: CampusGraph,
+) -> None:
+    """The way out of the ambiguity above, in the words the app itself uses.
+
+    The picker writes places as "Lift Lobby (Hive · B4)", so that is the
+    format people copy. Every ordered check misses it, because no single
+    field holds that whole string.
+    """
+    resolution = resolve_place(graph, "Hive B4 Lift Lobby")
+
+    assert resolution.ambiguous is False
+    assert resolution.resolved.node_id == "Hive_B4_A"
+
+
+def test_the_same_words_in_any_order_find_the_same_place(
+    graph: CampusGraph,
+) -> None:
+    """Nobody should have to guess which order the fields were written in."""
+    assert resolve_place(graph, "lift lobby b5").resolved.node_id == "Hive_B5_A"
+    assert resolve_place(graph, "b5 lift lobby").resolved.node_id == "Hive_B5_A"
+
+
+def test_naming_only_a_floor_is_still_a_question(graph: CampusGraph) -> None:
+    """Matching every word given is not the same as having given enough."""
+    assert resolve_place(graph, "Hive B4").resolved is None
+
+
 def test_an_ambiguous_phrase_produces_a_question_naming_both(
     graph: CampusGraph,
 ) -> None:

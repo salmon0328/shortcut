@@ -45,6 +45,26 @@
         <div class="sheet">
           <div class="sheet-handle" aria-hidden="true"></div>
 
+          <!-- Say it in a sentence, instead of filling the two boxes below.
+               Hidden until the backend says the /ai routes are mounted, so a
+               machine without the AI extras shows the pickers alone rather
+               than a box that answers every question with an error. -->
+          <div class="ask" id="ask" hidden>
+            <label for="ask-input">Where are you heading?</label>
+            <div class="ask-row">
+              <input
+                type="text"
+                id="ask-input"
+                placeholder="Main entrance to the courtyard, no stairs"
+                maxlength="500"
+                autocomplete="off"
+              />
+              <button type="button" id="ask-button" class="secondary">Ask</button>
+            </div>
+            <p id="ask-status" class="ask-status" hidden></p>
+            <div id="ask-choices" class="ask-choices" hidden></div>
+          </div>
+
           <form id="route-form" autocomplete="off">
             <div class="field">
               <label for="origin-input">I am at…</label>

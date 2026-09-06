@@ -130,6 +130,47 @@ def test_the_parser_never_switches_the_shelter_filter_off(
     assert result.request.sheltered_only is True
 
 
+def test_what_was_refused_survives_a_question_about_somewhere_else(
+    graph: CampusGraph,
+) -> None:
+    """The refusal is the whole point, and it outlives the request being None.
+
+    "Take me to staircase 1, I can't use stairs" cannot become a request,
+    because staircase 1 is on two floors. The refusal of stairs still has to
+    reach the caller: without it, answering the question hands back a route
+    up a staircase the student just said they cannot climb.
+    """
+    result = build_result(
+        graph, intent(destination_phrase="staircase 1", avoid_stairs=True)
+    )
+
+    assert result.request is None, "sanity: the destination is genuinely ambiguous"
+    assert result.needs_clarification is True
+    assert result.preferences.allow_stairs is False
+
+
+def test_preferences_are_reported_even_with_nothing_to_report(
+    graph: CampusGraph,
+) -> None:
+    """A caller can always read them, so it never has to guess a default."""
+    result = build_result(graph, intent())
+
+    assert result.preferences.allow_stairs is True
+    assert result.preferences.preference == "fastest"
+
+
+def test_the_request_and_the_preferences_never_disagree(graph: CampusGraph) -> None:
+    """Two ways to read the same answer must not drift apart."""
+    result = build_result(
+        graph, intent(avoid_stairs=True, preference="sheltered", wants_shelter=True)
+    )
+
+    assert result.request is not None
+    assert result.request.allow_stairs == result.preferences.allow_stairs
+    assert result.request.preference == result.preferences.preference
+    assert result.request.sheltered_only == result.preferences.sheltered_only
+
+
 # --------------------------------------------------------------------------
 # When it cannot be sure, it asks
 # --------------------------------------------------------------------------

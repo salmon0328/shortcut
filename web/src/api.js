@@ -75,6 +75,38 @@ export const requestRoute = (payload) => postJson("/route", payload);
 /** The same route, plus other ways round worth considering. */
 export const requestRouteOptions = (payload) => postJson("/route/options", payload);
 
+// --- the plain-language box ------------------------------------------------
+
+/**
+ * Read a typed sentence into a route request.
+ *
+ * `current` is what the controls already show, and is only read for the
+ * preferences - the backend overwrites its origin and destination with
+ * whatever the sentence resolved to. It is sent only when both places are
+ * already chosen, because a RouteRequest cannot be built without them.
+ *
+ * The answer is not always a route: an ambiguous place ("staircase 1", which
+ * exists on two floors) comes back with `question` and the candidates it
+ * could have meant, and no request at all.
+ */
+export const parseSentence = (text, current = null) =>
+  postJson("/ai/parse", current ? { text, current } : { text });
+
+/** Whether the plain-language box is worth showing at all.
+ *
+ * The /ai routes are only mounted when the AI dependencies are installed, so
+ * a machine without them 404s here rather than erroring - which is the same
+ * answer as "not available", and is why this never throws.
+ */
+export async function aiAvailable() {
+  try {
+    const health = await request("/ai/health");
+    return Boolean(health?.available);
+  } catch {
+    return false;
+  }
+}
+
 /** The floorplan for one floor, or null when nobody has uploaded one yet. */
 export async function fetchFloorplan(building, floor) {
   const query = new URLSearchParams({ building, floor });

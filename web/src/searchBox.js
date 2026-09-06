@@ -192,5 +192,8 @@ export function createSearchBox(input, list, onChange = () => {}, options = {}) 
     selectedId: () => selectedId,
     select: (node) => choose(node),
     clear,
+    // So a caller that could not resolve a place for the user can at least
+    // put the cursor where they have to finish the job by hand.
+    focus: () => input.focus(),
   };
 }

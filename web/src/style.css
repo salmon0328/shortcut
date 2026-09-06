@@ -294,6 +294,72 @@ textarea:focus-visible {
   outline-offset: 1px;
 }
 
+/* --- the plain-language box --- */
+
+.ask {
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  background: var(--accent-soft);
+  border-radius: var(--radius);
+}
+
+.ask-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.ask-row input[type="text"] {
+  background: var(--card);
+}
+
+.ask-row button {
+  flex: none;
+  width: auto;
+  margin: 0;
+}
+
+.ask-status {
+  margin: 0.6rem 0 0;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.ask-status.asking {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.ask-status.error {
+  color: var(--danger);
+}
+
+/* The places an ambiguous phrase could have meant. Wraps rather than
+   scrolls: there are only ever two or three. */
+.ask-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+.ask-choice {
+  width: auto;
+  margin: 0;
+  padding: 0.45rem 0.75rem;
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--accent);
+  background: var(--card);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.ask-choice:hover {
+  color: var(--card);
+  background: var(--accent);
+}
+
 /* --- search boxes --- */
 
 .combobox {

@@ -18,7 +18,13 @@ from __future__ import annotations
 from shortcut.ai.bedrock import LlmPort
 from shortcut.ai.places import PlaceMatch, PlaceResolution, resolve_place
 from shortcut.ai.prompts import PARSE_SYSTEM, PARSE_VERSION, parse_user_message
-from shortcut.ai.schemas import ParsedIntent, ParseResult, PlaceCandidate, PlaceChoice
+from shortcut.ai.schemas import (
+    ParsedIntent,
+    ParseResult,
+    PlaceCandidate,
+    PlaceChoice,
+    RoutePreferences,
+)
 from shortcut.ai.usage import TokenUsage
 from shortcut.graph_store import CampusGraph
 from shortcut.schemas import RouteRequest
@@ -99,26 +105,37 @@ def build_result(
     question = _first_question(intent, origin_resolution, destination_resolution)
     resolved_both = origin.resolved is not None and destination.resolved is not None
 
+    # Worked out whether or not both places resolved. A sentence that refuses
+    # stairs has refused them even when it was vague about where it is going,
+    # and the caller needs to hear that in order to still honour it after the
+    # question is answered.
+    base = (
+        RoutePreferences()
+        if current is None
+        else RoutePreferences(**current.model_dump(exclude={"origin", "destination"}))
+    )
+    preferences = RoutePreferences(
+        preference=intent.preference or base.preference,
+        allow_stairs=_merge(intent.avoid_stairs, base.allow_stairs),
+        allow_lift=_merge(intent.avoid_lift, base.allow_lift),
+        allow_shuttle=_merge(intent.avoid_shuttle, base.allow_shuttle),
+        # wants_shelter is a stated requirement, so it may switch the hard
+        # filter on. It never switches it off - that is the agent's call,
+        # made in the open with a relaxation the user gets told about.
+        sheltered_only=base.sheltered_only or bool(intent.wants_shelter),
+    )
+
     request: RouteRequest | None = None
     if resolved_both and question is None:
-        base = current or RouteRequest(
-            origin=origin.resolved.node_id, destination=destination.resolved.node_id
-        )
         request = RouteRequest(
             origin=origin.resolved.node_id,
             destination=destination.resolved.node_id,
-            preference=intent.preference or base.preference,
-            allow_stairs=_merge(intent.avoid_stairs, base.allow_stairs),
-            allow_lift=_merge(intent.avoid_lift, base.allow_lift),
-            allow_shuttle=_merge(intent.avoid_shuttle, base.allow_shuttle),
-            # wants_shelter is a stated requirement, so it may switch the hard
-            # filter on. It never switches it off - that is the agent's call,
-            # made in the open with a relaxation the user gets told about.
-            sheltered_only=base.sheltered_only or bool(intent.wants_shelter),
+            **preferences.model_dump(),
         )
 
     return ParseResult(
         request=request,
+        preferences=preferences,
         origin=origin,
         destination=destination,
         needs_clarification=request is None,
