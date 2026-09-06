@@ -154,7 +154,11 @@ def test_each_node_has_the_expected_shape(client: TestClient) -> None:
         assert isinstance(node["id"], str) and node["id"]
         assert isinstance(node["name"], str) and node["name"]
         assert isinstance(node["building"], str) and node["building"]
-        assert isinstance(node["floor"], str) and node["floor"]
+        # A floor is a string, and it is allowed to be empty. Not every place
+        # is on one: the walkway between the buildings and the road-level
+        # entrances are outdoors, and giving them a floor would be inventing
+        # a fact to satisfy a field.
+        assert isinstance(node["floor"], str)
 
 
 def test_every_node_matches_the_graph_exactly(

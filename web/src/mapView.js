@@ -28,7 +28,7 @@ const canvas = document.querySelector("#map-canvas");
 let currentRoute = null;
 let currentFloorKey = null;
 
-function element(name, attributes = {}) {
+export function element(name, attributes = {}) {
   const node = document.createElementNS(SVG_NS, name);
   for (const [key, value] of Object.entries(attributes)) {
     node.setAttribute(key, String(value));
@@ -57,7 +57,7 @@ function showMessage(title, detail) {
 }
 
 /** Load an image just to find out how big it is, in its own pixels. */
-function measureImage(url) {
+export function measureImage(url) {
   return new Promise((resolve, reject) => {
     const image = new Image();
     image.addEventListener("load", () =>
@@ -87,7 +87,7 @@ function floorsOfRoute(route) {
 }
 
 /** Where a place sits on this plan, in image pixels, or null if unknown. */
-function toPixels(plan, node) {
+export function toPixels(plan, node) {
   if (node.x === null || node.y === null) return null;
   return {
     x: (node.x - plan.origin_x_m) / plan.metres_per_pixel,
@@ -96,7 +96,7 @@ function toPixels(plan, node) {
 }
 
 /** Pin radius in plan pixels, so pins look the same size on any floorplan. */
-function pinRadius(size, emphasis) {
+export function pinRadius(size, emphasis) {
   return (Math.max(size.width, size.height) / 100) * emphasis;
 }
 

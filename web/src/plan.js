@@ -13,7 +13,7 @@ import {
   requestRoute,
   requestRouteOptions,
 } from "./api.js";
-import { getNodes, nodeLabel, nodeName } from "./data.js";
+import { getNodes, nodeLabel, nodeName, placeWhere } from "./data.js";
 import { createSearchBox } from "./searchBox.js";
 import { showEmptyMap, showRouteOnMap } from "./mapView.js";
 
@@ -546,7 +546,7 @@ function askAbout(result, endName, question) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "ask-choice";
-    button.textContent = `${candidate.name} (${candidate.building} · ${candidate.floor})`;
+    button.textContent = `${candidate.name} (${placeWhere(candidate)})`;
     button.addEventListener("click", () => {
       fillBox(box, candidate.node_id);
       advance(result);

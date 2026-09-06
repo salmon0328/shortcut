@@ -148,19 +148,19 @@
       "id": "Hive_A",
       "name": "Back Entrance",
       "building": "Hive",
-      "floor": "",
+      "floor": "B4",
       "type": "junction",
-      "x": 0.24268020929372852,
-      "y": 0.9248101639608569
+      "x": 14.9,
+      "y": 46.78
     },
     {
       "id": "Hive_B",
       "name": "Side Entrance 1",
       "building": "Hive",
-      "floor": "",
+      "floor": "B4",
       "type": "junction",
-      "x": 0.43629741060743005,
-      "y": 0.8619175017174181
+      "x": 26.79,
+      "y": 43.6
     },
     {
       "id": "Hive_B3_A",
@@ -168,8 +168,8 @@
       "building": "Hive",
       "floor": "B3",
       "type": "lift",
-      "x": 0.566482543621536,
-      "y": 0.49967502640189165
+      "x": 38.58,
+      "y": 28.96
     },
     {
       "id": "Hive_B3_B",
@@ -177,8 +177,8 @@
       "building": "Hive",
       "floor": "B3",
       "type": "stairs",
-      "x": 0.5808249708604407,
-      "y": 0.4306606135411396
+      "x": 39.56,
+      "y": 24.96
     },
     {
       "id": "Hive_B3_C",
@@ -186,8 +186,8 @@
       "building": "Hive",
       "floor": "B3",
       "type": "stairs",
-      "x": 0.5162655121355278,
-      "y": 0.8495856079607361
+      "x": 35.16,
+      "y": 49.23
     },
     {
       "id": "Hive_B3_D",
@@ -195,8 +195,8 @@
       "building": "Hive",
       "floor": "B3",
       "type": "stairs",
-      "x": 0.7767219940929844,
-      "y": 0.7549890931842719
+      "x": 52.9,
+      "y": 43.75
     },
     {
       "id": "Hive_B3_E",
@@ -204,8 +204,8 @@
       "building": "Hive",
       "floor": "B3",
       "type": "stairs",
-      "x": 0.8127058640654703,
-      "y": 0.4385726502863663
+      "x": 55.35,
+      "y": 25.41
     },
     {
       "id": "Hive_B3_F",
@@ -213,8 +213,8 @@
       "building": "Hive",
       "floor": "B3",
       "type": "junction",
-      "x": 0.6656257426146654,
-      "y": 0.4300942999663083
+      "x": 45.34,
+      "y": 24.92
     },
     {
       "id": "Hive_B3_G",
@@ -222,143 +222,117 @@
       "building": "Hive",
       "floor": "B3",
       "type": "junction",
-      "x": 0.6007880790443216,
-      "y": 0.352435428438174
+      "x": 40.92,
+      "y": 20.42
     },
     {
       "id": "Hive_C",
       "name": "Side Entrance 2",
       "building": "Hive",
-      "floor": "",
+      "floor": "B4",
       "type": "junction",
-      "x": 0.5739972316339016,
-      "y": 0.8188348413315949
+      "x": 35.25,
+      "y": 41.42
     },
     {
       "id": "Hive_D",
       "name": "Side Entrance 3",
       "building": "Hive",
-      "floor": "",
+      "floor": "B4",
       "type": "junction",
-      "x": 0.7339813836237288,
-      "y": 0.7996339314504822
+      "x": 45.07,
+      "y": 40.45
     },
     {
       "id": "Hive_SS_Walkway_A",
       "name": "Zebra Crossing (SS Side)",
       "building": "Hive-SS",
-      "floor": "",
-      "type": "junction",
-      "x": 0.7038504464285714,
-      "y": 0.2734104477878892
+      "floor": "B4",
+      "type": "junction"
     },
     {
       "id": "Hive_SS_Walkway_B",
       "name": "Hive SS Walkway",
       "building": "Hive-SS",
-      "floor": "",
-      "type": "junction",
-      "x": 0.7928394236196634,
-      "y": 0.14877738533439216
+      "floor": "B4",
+      "type": "junction"
     },
     {
       "id": "Hive_SS_Walkway_C",
       "name": "SS Canteen Entrance",
       "building": "Hive-SS",
-      "floor": "",
-      "type": "junction",
-      "x": 0.6798968435704023,
-      "y": 0.41557507637219554
+      "floor": "B4",
+      "type": "junction"
     },
     {
       "id": "Hive_SS_Walkway_D",
       "name": "Zebra Crossing (Hive Side)",
       "building": "Hive-SS",
-      "floor": "",
-      "type": "junction",
-      "x": 0.7720001571479885,
-      "y": 0.05647126920930632
+      "floor": "B4",
+      "type": "junction"
     },
     {
       "id": "S3_B3_A",
       "name": "Side Path Entrance",
       "building": "S3",
       "floor": "B3",
-      "type": "junction",
-      "x": 0.5553857540675802,
-      "y": 0.2538202103323716
+      "type": "junction"
     },
     {
       "id": "S3_B3_B",
       "name": "Connecting Bridge",
       "building": "S3",
       "floor": "B3",
-      "type": "junction",
-      "x": 0.562153539644475,
-      "y": 0.16886774176538794
+      "type": "junction"
     },
     {
       "id": "SS_B3_A",
       "name": "SS Canteen Staircase 1",
       "building": "SS",
       "floor": "B3",
-      "type": "stairs",
-      "x": 0.6921843400816863,
-      "y": 0.44667308889587265
+      "type": "stairs"
     },
     {
       "id": "SS_B3_B",
       "name": "SS Concourse",
       "building": "SS",
       "floor": "B3",
-      "type": "junction",
-      "x": 0.5543622766948002,
-      "y": 0.47438200412826315
+      "type": "junction"
     },
     {
       "id": "SS_B3_D",
       "name": "SS Cheers",
       "building": "SS",
       "floor": "B3",
-      "type": "junction",
-      "x": 0.3682476372754374,
-      "y": 0.6065934970619611
+      "type": "junction"
     },
     {
       "id": "SS_B3_E",
       "name": "SS Main Staircase",
       "building": "SS",
       "floor": "B3",
-      "type": "junction",
-      "x": 0.342924549612897,
-      "y": 0.7501623766114075
+      "type": "junction"
     },
     {
       "id": "SS_B3_F",
       "name": "SS Lift Lobby 1",
       "building": "SS",
       "floor": "B3",
-      "type": "junction",
-      "x": 0.04161288405500066,
-      "y": 0.9088386444760508
+      "type": "junction"
     },
     {
       "id": "SS_Canteen_A",
       "name": "SS Canteen Staircase 1",
       "building": "SS",
-      "floor": "",
-      "type": "stairs",
-      "x": 0.5519086264624384,
-      "y": 0.5658554803757441
+      "floor": "B4",
+      "type": "stairs"
     },
     {
       "id": "SS_Canteen_B",
       "name": "SS Canteen Staircase 3",
       "building": "SS",
-      "floor": "",
-      "type": "junction",
-      "x": 0.661507201547106,
-      "y": 0.7407526148981227
+      "floor": "B4",
+      "type": "junction"
     }
   ],
   "edges": [

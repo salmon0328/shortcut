@@ -183,16 +183,26 @@ def test_an_ambiguous_destination_asks_instead_of_guessing(
 
     assert result.request is None
     assert result.needs_clarification is True
-    assert "B4" in result.question and "B5" in result.question
+    for floor in ("B3", "B4", "B5"):
+        assert floor in result.question
 
 
-def test_an_ambiguous_destination_offers_exactly_two_choices(
+def test_an_ambiguous_destination_offers_every_place_it_could_be(
     graph: CampusGraph,
 ) -> None:
-    """Two is a question. Eight is a list, and nobody reads a list."""
-    result = build_result(graph, intent(destination_phrase="staircase 1"))
+    """Nobody reads a list of eight - but a short list must still be complete.
 
-    assert len(result.destination.alternatives) == 2
+    This used to insist on exactly two choices, which was right when two
+    floors shared a name and wrong the moment a third did: the caller builds
+    its buttons from this list, so the third Staircase 1 became one a person
+    could not pick at all. Readability is handled where it belongs, in the
+    wording of the question, which stops naming them past three and says how
+    many there are instead.
+    """
+    result = build_result(graph, intent(destination_phrase="staircase 1"))
+    offered = {match.node_id for match in result.destination.alternatives}
+
+    assert offered == {"Hive_B3_C", "Hive_B4_C", "Hive_B5_C"}
 
 
 def test_an_unknown_place_is_admitted_to_rather_than_guessed_at(

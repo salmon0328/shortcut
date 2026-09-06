@@ -109,7 +109,11 @@ class PlaceCandidate(Strict):
 
     @property
     def label(self) -> str:
-        return f"{self.name} ({self.building} · {self.floor})"
+        # A place with no floor is outdoors - the walkway between the
+        # buildings, a road-level entrance - so the floor is left out rather
+        # than printed as an empty half of a separator.
+        where = " · ".join(part for part in (self.building, self.floor) if part)
+        return f"{self.name} ({where})"
 
 
 class PlaceChoice(Strict):
