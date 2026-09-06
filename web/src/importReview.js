@@ -160,6 +160,39 @@ function edgeFields(candidate) {
   return holder;
 }
 
+/**
+ * What was worked out about a floor's plan, as facts rather than boxes.
+ *
+ * Nothing here is editable. A scale is not a preference - it comes from the
+ * links drawn across the floor - and a box inviting somebody to type a
+ * different one would be inviting them to break the only thing that keeps the
+ * image and the pins on it agreeing.
+ */
+function floorplanFacts(candidate) {
+  const f = candidate.fields;
+  const holder = document.createElement("div");
+  holder.className = "import-facts";
+
+  const [wide, tall] = f.measures_m ?? [0, 0];
+  const rows = [
+    ["Measures", `${wide} m x ${tall} m`],
+    ["Image", `${f.width_px} x ${f.height_px} px`],
+    ["Built from", `${f.made_of} crop(s) of the drawing`],
+    ["Scale from", `${f.links_used} links, spread ${f.spread}x`],
+  ];
+  for (const [name, value] of rows) {
+    const row = document.createElement("p");
+    row.className = "import-fact";
+    const label = document.createElement("span");
+    label.textContent = name;
+    const detail = document.createElement("strong");
+    detail.textContent = value;
+    row.append(label, detail);
+    holder.appendChild(row);
+  }
+  return holder;
+}
+
 function note(text, kind) {
   const paragraph = document.createElement("p");
   paragraph.className = `import-note ${kind}`;
@@ -181,7 +214,9 @@ function candidateCard(candidate) {
 
   const tag = document.createElement("span");
   tag.className = `pending-tag ${candidate.kind}`;
-  tag.textContent = candidate.kind === "node" ? "place" : "link";
+  tag.textContent =
+    { node: "place", edge: "link", floorplan: "floorplan" }[candidate.kind] ??
+    candidate.kind;
   head.appendChild(tag);
 
   card.appendChild(head);
@@ -208,15 +243,38 @@ function candidateCard(candidate) {
       )
     );
   }
+  if (candidate.kind === "floorplan" && !candidate.fields.well_conditioned) {
+    card.appendChild(
+      note(
+        `The links on this floor disagree by ${candidate.fields.spread}x about ` +
+          "how big it is, so no single scale fits them. Check the measurements " +
+          "above look like the real building before approving.",
+        "warn"
+      )
+    );
+  }
+  if (candidate.kind === "floorplan" && candidate.fields.replaces_existing) {
+    card.appendChild(
+      note(
+        "This floor already has a plan. Approving stores this one alongside " +
+          "it and the map starts using the newer one.",
+        "info"
+      )
+    );
+  }
   if (candidate.marks.length > 0) {
     card.appendChild(
       note(`The drawing wrote "${candidate.marks.join('", "')}" on this line.`, "info")
     );
   }
 
-  card.appendChild(
-    candidate.kind === "node" ? nodeFields(candidate) : edgeFields(candidate)
-  );
+  if (candidate.kind === "floorplan") {
+    card.appendChild(floorplanFacts(candidate));
+  } else {
+    card.appendChild(
+      candidate.kind === "node" ? nodeFields(candidate) : edgeFields(candidate)
+    );
+  }
 
   const actions = document.createElement("div");
   actions.className = "import-actions";
