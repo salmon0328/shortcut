@@ -303,3 +303,76 @@ def test_reading_the_same_drawing_twice_gives_the_same_answer() -> None:
 def test_it_never_writes_the_survey_unless_asked(survey: dict) -> None:
     """Importing the module must not have side effects on the real file."""
     assert json.loads(SURVEY.read_text(encoding="utf-8")) == survey
+
+
+# --------------------------------------------------------------------------
+# Renaming a place after it has been imported
+# --------------------------------------------------------------------------
+#
+# The drawing calls a place "Hive-B3-C" and a student calls it something a
+# person would say. Nobody can write the second until they see the first in
+# the survey, so the first import necessarily writes a stand-in and the names
+# file is where that gets corrected.
+
+
+def _named_place(node_id: str, name: str):
+    return import_survey.NewPlace(
+        node_id=node_id, name=name, building="Hive", floor="B3",
+        type="junction", x=None, y=None,
+    )
+
+
+def test_a_place_already_in_the_survey_takes_its_new_name_from_the_names_file() -> None:
+    survey = {
+        "nodes": [{"id": "Hive_B3_C", "name": "Hive B3 C", "building": "Hive",
+                   "floor": "B3", "type": "junction"}],
+        "edges": [],
+    }
+
+    updated = import_survey.build_survey(
+        survey, [_named_place("Hive_B3_C", "Study Pods")], {}, {}
+    )
+
+    assert [node["name"] for node in updated["nodes"]] == ["Study Pods"]
+
+
+def test_renaming_a_place_does_not_add_a_second_one(
+) -> None:
+    """Every place is listed every run, so appending them all doubles the map."""
+    survey = {
+        "nodes": [{"id": "Hive_B3_C", "name": "Hive B3 C", "building": "Hive",
+                   "floor": "B3", "type": "junction"}],
+        "edges": [],
+    }
+
+    updated = import_survey.build_survey(
+        survey, [_named_place("Hive_B3_C", "Study Pods")], {}, {}
+    )
+
+    assert len(updated["nodes"]) == 1
+
+
+def test_a_place_the_survey_does_not_have_is_added(
+) -> None:
+    survey = {"nodes": [], "edges": []}
+
+    updated = import_survey.build_survey(
+        survey, [_named_place("Hive_B3_C", "Study Pods")], {}, {}
+    )
+
+    assert [node["id"] for node in updated["nodes"]] == ["Hive_B3_C"]
+
+
+def test_building_the_survey_twice_over_gives_the_same_thing(survey: dict) -> None:
+    """The check that makes this safe to re-run whenever the map is redrawn.
+
+    Written after a version that appended every place on every run, taking
+    forty places to eighty while still passing every other test here.
+    """
+    places = [_named_place(node["id"], node["name"]) for node in survey["nodes"]]
+
+    once = import_survey.build_survey(survey, places, {}, {})
+    twice = import_survey.build_survey(once, places, {}, {})
+
+    assert len(once["nodes"]) == len(survey["nodes"])
+    assert twice == once

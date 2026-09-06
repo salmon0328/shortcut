@@ -1,1 +1,41 @@
 id,name,building,floor,type
+Hive_A,Hive A,Hive,B4,junction
+Hive_B,Hive B,Hive,B4,junction
+Hive_B3_A,Hive B3 A,Hive,B3,junction
+Hive_B3_B,Hive B3 B,Hive,B3,junction
+Hive_B3_C,Hive B3 C,Hive,B3,junction
+Hive_B3_D,Hive B3 D,Hive,B3,junction
+Hive_B3_E,Hive B3 E,Hive,B3,junction
+Hive_B3_F,Hive B3 F,Hive,B3,junction
+Hive_B3_G,Hive B3 G,Hive,B3,junction
+Hive_B4_A,Lift Lobby,Hive,B4,junction
+Hive_B4_B,Main Staircase,Hive,B4,stairs
+Hive_B4_C,Staircase 1,Hive,B4,stairs
+Hive_B4_D,Staircase 2,Hive,B4,stairs
+Hive_B4_E,Staircase 3,Hive,B4,stairs
+Hive_B4_F,Side Entrance 1,Hive,B4,junction
+Hive_B4_G,Side Entrance 2,Hive,B4,junction
+Hive_B5_A,Lift Lobby,Hive,B5,junction
+Hive_B5_B,Main Staircase,Hive,B5,stairs
+Hive_B5_C,Staircase 1,Hive,B5,stairs
+Hive_B5_D,Staircase 2,Hive,B5,stairs
+Hive_B5_E,Staircase 3,Hive,B5,stairs
+Hive_B5_F,Pick Lockers,Hive,B5,junction
+Hive_B5_G,Courtyard,Hive,B5,junction
+Hive_B5_H,Side Entrance,Hive,B5,junction
+Hive_B5_I,Main Entrance,Hive,B5,junction
+Hive_C,Hive C,Hive,B4,junction
+Hive_D,Hive D,Hive,B4,junction
+Hive_SS_Walkway_A,Hive SS Walkway A,Hive-SS,B4,junction
+Hive_SS_Walkway_B,Hive SS Walkway B,Hive-SS,B4,junction
+Hive_SS_Walkway_C,Hive SS Walkway C,Hive-SS,B4,junction
+Hive_SS_Walkway_D,Hive SS Walkway D,Hive-SS,B4,junction
+S3_B3_A,S3 B3 A,S3,B3,junction
+S3_B3_B,S3 B3 B,S3,B3,junction
+SS_B3_A,SS B3 A,SS,B3,junction
+SS_B3_B,SS B3 B,SS,B3,junction
+SS_B3_D,SS B3 D,SS,B3,junction
+SS_B3_E,SS B3 E,SS,B3,junction
+SS_B3_F,SS B3 F,SS,B3,junction
+SS_Canteen_A,SS Canteen A,SS,B4,junction
+SS_Canteen_B,SS Canteen B,SS,B4,junction

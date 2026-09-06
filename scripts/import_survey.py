@@ -314,20 +314,33 @@ def main() -> int:
         for place in extraction.places:
             drawn.setdefault(place.name, (place.name, extraction.page))
 
+    # Every place the drawing has, listed whether the survey knows it or not.
+    #
+    # Not "the ones this script added". That was the first design and it was
+    # wrong in a way worth recording: the file was read to decide what the
+    # script owned and rewritten from the same list, so a single bad write
+    # emptied it and every run after that agreed it owned nothing. A file that
+    # is its own memory forgets.
+    #
+    # So ownership is not remembered at all. The drawing says which places
+    # exist, the survey says what they are currently called, and the names
+    # file is regenerated from both every run. Leaving a row alone is a no-op
+    # because its name already matches the survey; changing one renames the
+    # place. The protection for a name somebody chose by hand is the same as
+    # for everything else in the survey - it is a line in a git diff.
     new_places: list[NewPlace] = []
     for drawn_name, (_, page) in sorted(drawn.items()):
         node_id = node_id_for(drawn_name)
-        if node_id in known_nodes:
-            continue
         building, floor = building_and_floor(drawn_name, page)
         row = csv_rows.get(node_id, {})
+        committed = known_nodes.get(node_id, {})
         new_places.append(
             NewPlace(
                 node_id=node_id,
-                name=row.get("name") or readable(drawn_name),
-                building=row.get("building") or building,
-                floor=row.get("floor") or floor,
-                type=row.get("type") or "junction",
+                name=row.get("name") or committed.get("name") or readable(drawn_name),
+                building=row.get("building") or committed.get("building") or building,
+                floor=row.get("floor") or committed.get("floor") or floor,
+                type=row.get("type") or committed.get("type") or "junction",
                 x=None,
                 y=None,
             )
@@ -468,9 +481,16 @@ def main() -> int:
     lines_out += ["", "## Scale fitted for each floor", ""]
     lines_out += [f"- {note}" for note in scale_notes] or ["- none"]
 
+    adding = [place for place in new_places if place.node_id not in known_nodes]
+    renaming = [
+        place
+        for place in new_places
+        if place.node_id in known_nodes
+        and known_nodes[place.node_id]["name"] != place.name
+    ]
     summary = (
-        f"{len(new_places)} places and {len(new_edges)} links to add; "
-        f"{len(coordinates)} places positioned"
+        f"{len(adding)} places and {len(new_edges)} links to add; "
+        f"{len(renaming)} to rename; {len(coordinates)} places positioned"
     )
 
     # The review and the names file are working notes, not survey data, so
@@ -533,12 +553,36 @@ def build_survey(
     Re-running against an unchanged drawing therefore still produces no diff,
     which is what makes it safe to run whenever the map is redrawn.
     """
+    named = {place.node_id: place for place in new_places}
+
     nodes = [dict(node) for node in survey["nodes"]]
     for node in nodes:
         if node["id"] in coordinates:
             node["x"], node["y"] = coordinates[node["id"]]
+        # A place this script added takes its name, type and floor from the
+        # names file every run, not just the first. The map calls a place
+        # "Hive-B3-C" and a student calls it something a person would say, and
+        # nobody can write the second one until they see the first in the
+        # survey. So the first import necessarily writes a stand-in, and the
+        # names file is where that gets corrected - which only works if a
+        # later run is allowed to apply it.
+        #
+        # Only places from that file. The places somebody surveyed by hand are
+        # not in it and are never touched.
+        settled = named.get(node["id"])
+        if settled is not None:
+            node["name"] = settled.name
+            node["building"] = settled.building
+            node["floor"] = settled.floor
+            node["type"] = settled.type
 
+    # Only the places the survey does not have yet. The rest were handled
+    # above, where their name was refreshed from the names file in place -
+    # appending them here as well is how forty places became eighty.
+    already = {node["id"] for node in nodes}
     for place in sorted(new_places, key=lambda item: item.node_id):
+        if place.node_id in already:
+            continue
         node = {
             "id": place.node_id,
             "name": place.name,
