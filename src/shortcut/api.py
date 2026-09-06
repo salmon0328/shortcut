@@ -710,6 +710,36 @@ def get_photos_list(
     return [PhotoSummary.from_photo(photo) for photo in found]
 
 
+# An uploaded image never changes. Replacing a floorplan or a photo stores a
+# new one under a new id and leaves the old file alone, so a URL that has
+# answered once will answer the same for ever - which is exactly the condition
+# "immutable" describes, and it is worth saying out loud.
+#
+# It matters more than it looks. These files come from S3 now, and the map
+# panel asks for a floorplan every time a route is drawn: without this the
+# browser re-downloads the better part of a megabyte on each one and the map
+# arrives about three seconds late, looking broken rather than slow. The
+# server-side cache below covers the first request; this covers all the rest.
+IMMUTABLE = "public, max-age=31536000, immutable"
+
+#: Images already fetched from the store, kept by id.
+#:
+#: Unbounded per process, which is safe here for a reason worth stating: an id
+#: is a fresh uuid per upload and is never reused, and both endpoints look the
+#: image up in the store *before* consulting this - so a deleted image still
+#: answers 404 whatever is cached, and the worst a stale entry costs is the
+#: memory until restart. The deletes below drop their entry anyway, because
+#: leaving rubbish behind on purpose invites somebody to rely on it.
+_image_cache: dict[str, bytes] = {}
+
+
+def _cached_bytes(key: str, read) -> bytes:
+    """Read an image once per process, however many routes ask for it."""
+    if key not in _image_cache:
+        _image_cache[key] = read()
+    return _image_cache[key]
+
+
 @app.get(
     "/photos/{photo_id}/file",
     summary="Fetch the image itself",
@@ -723,12 +753,16 @@ def get_photo_file(
             status_code=status.HTTP_404_NOT_FOUND, detail=f"No photo {photo_id!r}."
         )
     try:
-        content = photos.read_file(photo)
+        content = _cached_bytes(f"photo:{photo.id}", lambda: photos.read_file(photo))
     except PhotoStoreError as error:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=str(error)
         ) from error
-    return Response(content=content, media_type=photo.content_type)
+    return Response(
+        content=content,
+        media_type=photo.content_type,
+        headers={"Cache-Control": IMMUTABLE},
+    )
 
 
 @app.post(
@@ -845,6 +879,7 @@ def patch_photo(
     summary="Delete a photo",
 )
 def delete_photo(photo_id: str, photos: PhotoStore = Depends(get_photos)) -> None:
+    _image_cache.pop(f"photo:{photo_id}", None)
     if not photos.delete(photo_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=f"No photo {photo_id!r}."
@@ -1117,12 +1152,16 @@ def get_floorplan_file(
             detail=f"No floorplan {floorplan_id!r}.",
         )
     try:
-        content = floorplans.read_file(plan)
+        content = _cached_bytes(f"plan:{plan.id}", lambda: floorplans.read_file(plan))
     except FloorplanStoreError as error:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=str(error)
         ) from error
-    return Response(content=content, media_type=plan.content_type)
+    return Response(
+        content=content,
+        media_type=plan.content_type,
+        headers={"Cache-Control": IMMUTABLE},
+    )
 
 
 @app.post(
@@ -1209,6 +1248,7 @@ def patch_floorplan(
 def delete_floorplan(
     floorplan_id: str, floorplans: FloorplanStore = Depends(get_floorplans_store)
 ) -> None:
+    _image_cache.pop(f"plan:{floorplan_id}", None)
     if not floorplans.delete(floorplan_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

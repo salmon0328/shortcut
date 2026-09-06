@@ -291,3 +291,58 @@ def test_a_new_place_can_be_added_with_coordinates(client: TestClient) -> None:
 
     added = next(n for n in client.get("/nodes").json() if n["id"] == "Hive_B5_J")
     assert (added["x"], added["y"]) == (4.0, 8.0)
+
+
+# --------------------------------------------------------------------------
+# Serving the image itself
+# --------------------------------------------------------------------------
+
+
+def test_a_floorplan_is_only_read_from_the_store_once(
+    client: TestClient, floorplans: FloorplanStore
+) -> None:
+    """The map asks for a plan every time it draws a route.
+
+    Once these images came from S3 that meant re-downloading the better part
+    of a megabyte per route, and the map arriving seconds late looks broken
+    rather than slow. An uploaded image never changes - replacing one stores a
+    new file under a new id - so reading it more than once is pure waste.
+    """
+    plan = upload(client).json()
+    reads = 0
+    original = floorplans.read_file
+
+    def counted(*args, **kwargs):
+        nonlocal reads
+        reads += 1
+        return original(*args, **kwargs)
+
+    floorplans.read_file = counted  # type: ignore[method-assign]
+
+    for _ in range(3):
+        assert client.get(f"/floorplans/{plan['id']}/file").status_code == 200
+
+    assert reads == 1
+
+
+def test_a_floorplan_image_tells_the_browser_it_will_never_change(
+    client: TestClient,
+) -> None:
+    """So the second route drawn does not fetch the plan again at all."""
+    plan = upload(client).json()
+
+    response = client.get(f"/floorplans/{plan['id']}/file")
+
+    assert "immutable" in response.headers["cache-control"]
+
+
+def test_a_deleted_floorplan_stops_being_served_even_though_it_was_cached(
+    client: TestClient,
+) -> None:
+    """The store is asked first, so the cache cannot outlive the file."""
+    plan = upload(client).json()
+    assert client.get(f"/floorplans/{plan['id']}/file").status_code == 200
+
+    assert client.delete(f"/floorplans/{plan['id']}").status_code == 204
+
+    assert client.get(f"/floorplans/{plan['id']}/file").status_code == 404
