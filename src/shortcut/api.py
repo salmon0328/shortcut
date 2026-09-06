@@ -54,6 +54,7 @@ from shortcut.overrides import (
     patch_edge,
     patch_node,
     remove_addition,
+    remove_entity,
     save_overrides,
     set_override,
 )
@@ -1093,41 +1094,44 @@ def patch_admin_edge(
     )
 
 
-@app.delete(
-    "/admin/additions/{target_kind}/{target_id}",
-    response_model=GraphChangeResult,
-    summary="Remove something an administrator added",
-)
-def delete_admin_addition(
+def _delete_target(
+    request: Request,
+    graph: CampusGraph,
+    photos: PhotoStore,
     target_kind: str,
     target_id: str,
-    request: Request,
-    photos: PhotoStore = Depends(get_photos),
+    exists: bool,
 ) -> GraphChangeResult:
-    """Delete an added place or link, along with its photos.
+    """Remove a place or link, whether it was added here or surveyed.
 
-    Only additions can be removed. Surveyed places and links stay: closing one
-    is what ``blocked`` is for, and deleting it here would put the map out of
-    step with the building somebody actually measured.
+    Two different removals wearing one name. Something added through the app
+    is simply un-added - the entry leaves the overrides file and there is no
+    trace, because there was never anything in the survey to contradict.
+    Something surveyed gets a tombstone instead: the survey is what a person
+    measured in the building and the app does not write it, so the deletion
+    lives alongside every other pending change until somebody graduates it and
+    reads the diff.
     """
-    if target_kind not in ("node", "edge"):
+    if not exists:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Kind must be 'node' or 'edge'.",
+            detail=f"No {'place' if target_kind == 'node' else 'link'} {target_id!r}.",
         )
 
-    overrides_path = request.app.state.overrides_path
-    if not remove_addition(overrides_path, target_kind, target_id):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=(
-                f"{target_id!r} was not added through the app, so it cannot be "
-                f"removed here. Surveyed places and links can only be blocked."
-            ),
-        )
+    def write(path):
+        # Un-adding beats a tombstone where both would work: it leaves the
+        # overrides file as if the thing had never been added, rather than
+        # carrying a note about deleting something that was never surveyed.
+        if not remove_addition(path, target_kind, target_id):
+            remove_entity(path, target_kind, target_id)
 
+    updated = _apply_change(request, write)
+
+    # Pictures of somewhere that no longer exists are just files nobody can
+    # reach, and they would come back attached to the id if it were ever
+    # reused.
     photos.delete_for_target(target_kind, target_id)
-    updated = _reload_graph(request)
+
     return GraphChangeResult(
         target_kind=target_kind,
         target_id=target_id,
@@ -1135,6 +1139,77 @@ def delete_admin_addition(
         node_count=len(updated.nodes),
         edge_count=len(updated.edges),
     )
+
+
+@app.delete(
+    "/admin/nodes/{node_id}",
+    response_model=GraphChangeResult,
+    summary="Remove a place, and every link that led to it",
+    responses={404: {"description": "No place with that id."}},
+)
+def delete_admin_node(
+    node_id: str,
+    request: Request,
+    graph: CampusGraph = Depends(get_graph),
+    photos: PhotoStore = Depends(get_photos),
+) -> GraphChangeResult:
+    """Delete a place. Links to it go too, because they would point at nothing.
+
+    That cascade is not a convenience: an edge whose end does not exist makes
+    the graph refuse to build, so leaving them would break the map rather than
+    leave it untidy.
+    """
+    return _delete_target(
+        request, graph, photos, "node", node_id, node_id in graph.nodes
+    )
+
+
+@app.delete(
+    "/admin/edges/{edge_id}",
+    response_model=GraphChangeResult,
+    summary="Remove a link",
+    responses={404: {"description": "No link with that id."}},
+)
+def delete_admin_edge(
+    edge_id: str,
+    request: Request,
+    graph: CampusGraph = Depends(get_graph),
+    photos: PhotoStore = Depends(get_photos),
+) -> GraphChangeResult:
+    return _delete_target(
+        request, graph, photos, "edge", edge_id, edge_id in graph.edges_by_id
+    )
+
+
+@app.delete(
+    "/admin/additions/{target_kind}/{target_id}",
+    response_model=GraphChangeResult,
+    summary="Remove something an administrator added",
+    deprecated=True,
+)
+def delete_admin_addition(
+    target_kind: str,
+    target_id: str,
+    request: Request,
+    graph: CampusGraph = Depends(get_graph),
+    photos: PhotoStore = Depends(get_photos),
+) -> GraphChangeResult:
+    """The older, additions-only removal. Kept so nothing pointed at it breaks.
+
+    Prefer ``DELETE /admin/nodes/{id}`` and ``DELETE /admin/edges/{id}``, which
+    remove surveyed places and links too.
+    """
+    if target_kind not in ("node", "edge"):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Kind must be 'node' or 'edge'.",
+        )
+    exists = (
+        target_id in graph.nodes
+        if target_kind == "node"
+        else target_id in graph.edges_by_id
+    )
+    return _delete_target(request, graph, photos, target_kind, target_id, exists)
 
 
 # --------------------------------------------------------------------------
@@ -1512,6 +1587,12 @@ def _pending_change(
     graph: CampusGraph, kind: str, change: str, target_id: str, fields: dict
 ) -> PendingChange:
     graduating, live = _split_fields(fields)
+    if change == "removed":
+        # A removal graduates whatever it carries, and it carries almost
+        # nothing - the fact is the deletion itself. Sorting it by its fields
+        # would count it as live-only and let the summary say nothing is
+        # waiting for the survey while a place sits deleted.
+        graduating, live = ["removed"], []
     return PendingChange(
         kind=kind,
         change=change,
@@ -1549,6 +1630,15 @@ def get_pending_changes(
         changes.append(_pending_change(graph, "node", "edited", node_id, fields))
     for edge_id, fields in overrides["edges"].items():
         changes.append(_pending_change(graph, "edge", "edited", edge_id, fields))
+
+    # Deletions are pending changes like any other, and the one kind that
+    # cannot be seen by looking at the map - the place is simply not there any
+    # more, with nothing to click on and ask about. Listing them here is the
+    # only place somebody can notice one before it graduates.
+    for node_id, fields in overrides.get("removed_nodes", {}).items():
+        changes.append(_pending_change(graph, "node", "removed", node_id, fields))
+    for edge_id, fields in overrides.get("removed_edges", {}).items():
+        changes.append(_pending_change(graph, "edge", "removed", edge_id, fields))
 
     return PendingChanges(
         changes=changes,

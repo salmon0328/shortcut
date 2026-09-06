@@ -149,6 +149,42 @@ def test_surveyed_coordinates_move_into_the_survey(surveyed: dict) -> None:
     assert (node["x"], node["y"]) == (12.5, 30.0)
 
 
+def test_a_deleted_place_leaves_the_survey(workspace: dict) -> None:
+    """A deletion is as much a fact about the building as an addition.
+
+    Left ungraduated it would live only in one machine's overrides file, and
+    the place would still be there for everybody else.
+    """
+    with TestClient(app) as client:
+        app.state.overrides_path = workspace["overrides"]
+        assert client.delete("/admin/nodes/Hive_B5_A").status_code == 200
+
+    run(workspace, "--write")
+
+    survey = json.loads(workspace["campus"].read_text(encoding="utf-8"))
+    assert not any(node["id"] == "Hive_B5_A" for node in survey["nodes"])
+    # And nothing is left pointing at it, which would make the file unloadable.
+    assert not any(
+        "Hive_B5_A" in (edge["from"], edge["to"]) for edge in survey["edges"]
+    )
+
+
+def test_a_deleted_link_leaves_the_survey_but_its_places_stay(
+    workspace: dict,
+) -> None:
+    with TestClient(app) as client:
+        app.state.overrides_path = workspace["overrides"]
+        edge = client.get("/edges").json()[0]
+        assert client.delete(f"/admin/edges/{edge['id']}").status_code == 200
+
+    run(workspace, "--write")
+
+    survey = json.loads(workspace["campus"].read_text(encoding="utf-8"))
+    assert not any(e["id"] == edge["id"] for e in survey["edges"])
+    ids = {node["id"] for node in survey["nodes"]}
+    assert edge["from_id"] in ids and edge["to_id"] in ids
+
+
 def test_a_report_condition_stays_out_of_the_survey(surveyed: dict) -> None:
     """This week's burst pipe is not a permanent feature of the building."""
     run(surveyed, "--write")

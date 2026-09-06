@@ -8,12 +8,13 @@
 import {
   addEdge,
   addNode,
-  deleteAddition,
+  deleteTarget,
   deletePhoto,
   fetchPhotos,
   photoUrl,
   updateEdge,
   updateNode,
+  updatePhoto,
   uploadPhoto,
 } from "./api.js";
 import {
@@ -521,6 +522,9 @@ const editPhotos = createPhotoQueue(
 
 let selectedNode = null;
 let target = null; // { kind, id, data }
+// Where a photo of the selected place or link could be looking. Filled in by
+// showTarget, read by both the upload queue and the stored-photo cards.
+let facingChoices = [];
 
 function fillTargetOptions(node) {
   inspectTarget.replaceChildren();
@@ -613,12 +617,14 @@ function showTarget() {
   }
 
   // A photo is only useful for directions if it says which way it looks, so
-  // the choices are the places you could be heading from here.
-  editPhotos.setFacingChoices(
+  // the choices are the places you could be heading from here. Kept in one
+  // place because the same list has to answer twice: once for photos about
+  // to be uploaded, once for correcting the direction of one already stored.
+  facingChoices =
     kind === "edge"
       ? [data.from_id, data.to_id]
-      : edgesTouching(id).map((edge) => otherEnd(edge, id))
-  );
+      : edgesTouching(id).map((edge) => otherEnd(edge, id));
+  editPhotos.setFacingChoices(facingChoices);
   editPhotos.clear();
   refreshPhotos();
   inspectPanel.hidden = false;
@@ -658,15 +664,34 @@ inspectSave.addEventListener("click", async () => {
 
 inspectDelete.addEventListener("click", async () => {
   if (!target) return;
+
+  // Asked before doing, because a place takes its links with it and there is
+  // no undo button on this screen - putting it back means adding it again by
+  // hand, or deleting the tombstone out of the overrides file.
+  const what = target.kind === "node" ? "place" : "link";
+  const extra =
+    target.kind === "node" ? " Every link to it will be removed as well." : "";
+  if (!window.confirm(`Remove this ${what}?${extra}`)) return;
+
+  inspectDelete.disabled = true;
   try {
-    await deleteAddition(target.kind, target.id);
+    const result = await deleteTarget(target.kind, target.id);
+    // The map just changed under the rest of the app, so every place list it
+    // hands to a search box has to be re-read.
     await loadReferenceData();
     inspectBox.clear();
     inspectPanel.hidden = true;
     refreshMapEditor();
-    showStatus("Removed.", "success");
+    showStatus(
+      `Removed. The map now has ${result.node_count} places and ` +
+        `${result.edge_count} links. Nothing is in the survey until it is ` +
+        "graduated - see Pending.",
+      "success"
+    );
   } catch (error) {
     showStatus(error.message, "error");
+  } finally {
+    inspectDelete.disabled = false;
   }
 });
 
@@ -691,11 +716,55 @@ async function refreshPhotos() {
       image.alt = photo.caption || photo.location || "Photo";
       card.appendChild(image);
 
+      // The direction is editable, not just shown. Eighty-five of these were
+      // uploaded in bulk from files named by timestamp, so they arrived with
+      // no direction at all and the only way to give them one used to be
+      // deleting the photo and uploading it again.
+      const facing = document.createElement("select");
+      facing.className = "photo-facing";
+      facing.setAttribute("aria-label", "Which way this photo looks");
+
+      const none = document.createElement("option");
+      none.value = "";
+      none.textContent = "No direction";
+      none.selected = !photo.facing;
+      facing.appendChild(none);
+
+      // The photo's current direction may not be among the neighbours - the
+      // links around a place change - so it is added rather than silently
+      // dropped, which would make saving anything else clear it.
+      const choices = new Set(facingChoices);
+      if (photo.facing) choices.add(photo.facing);
+      for (const nodeId of choices) {
+        const option = document.createElement("option");
+        option.value = nodeId;
+        option.textContent = `Towards ${nodeName(nodeId)}`;
+        option.selected = nodeId === photo.facing;
+        facing.appendChild(option);
+      }
+
+      facing.addEventListener("change", async () => {
+        facing.disabled = true;
+        try {
+          await updatePhoto(photo.id, {
+            facing: facing.value || null,
+            // A null "facing" means "leave it alone", so clearing one needs
+            // to be said outright.
+            clear_facing: facing.value === "",
+          });
+          showStatus("Direction saved.", "success");
+        } catch (error) {
+          showStatus(error.message, "error");
+        } finally {
+          facing.disabled = false;
+          refreshPhotos();
+        }
+      });
+      card.appendChild(facing);
+
       const caption = document.createElement("figcaption");
-      const facing = photo.facing ? `Towards ${nodeName(photo.facing)}` : "No direction";
-      caption.textContent = [facing, photo.location, photo.caption]
-        .filter(Boolean)
-        .join(" · ");
+      caption.textContent =
+        [photo.location, photo.caption].filter(Boolean).join(" · ") || " ";
       card.appendChild(caption);
 
       const remove = document.createElement("button");

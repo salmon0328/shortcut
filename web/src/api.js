@@ -170,10 +170,19 @@ export const updateNode = (nodeId, changes) =>
 export const updateEdge = (edgeId, changes) =>
   patchJson(`/admin/edges/${encodeURIComponent(edgeId)}`, changes);
 
-export const deleteAddition = (targetKind, targetId) =>
-  request(`/admin/additions/${targetKind}/${encodeURIComponent(targetId)}`, {
-    method: "DELETE",
-  });
+/**
+ * Remove a place or a link, whether it was added here or surveyed.
+ *
+ * Removing a place removes every link to it: an edge whose end does not exist
+ * makes the map refuse to build, so that cascade is what keeps it loadable
+ * rather than a convenience. Nothing reaches the survey file either way -
+ * a surveyed deletion is recorded as pending until somebody graduates it.
+ */
+export const deleteTarget = (targetKind, targetId) =>
+  request(
+    `/admin/${targetKind === "node" ? "nodes" : "edges"}/${encodeURIComponent(targetId)}`,
+    { method: "DELETE" }
+  );
 
 export const fetchPhotos = (targetKind, targetId) => {
   const query = new URLSearchParams({
@@ -204,6 +213,17 @@ export function uploadPhoto({ file, targetKind, targetId, facing, location, capt
 
 export const deletePhoto = (photoId) =>
   request(`/photos/${encodeURIComponent(photoId)}`, { method: "DELETE" });
+
+/**
+ * Change what is recorded about a photo, above all which way it faces.
+ *
+ * A bulk upload cannot know the direction - the files are named by number and
+ * timestamp - so photos arrive undirected and get labelled afterwards by
+ * somebody who recognises the corridor. Clearing a direction needs its own
+ * flag, because a null `facing` means "leave it alone".
+ */
+export const updatePhoto = (photoId, changes) =>
+  patchJson(`/photos/${encodeURIComponent(photoId)}`, changes);
 
 /** Turn a photo's path into something an <img> can load. */
 export const photoUrl = (path) => `${API_BASE_URL}${path}`;

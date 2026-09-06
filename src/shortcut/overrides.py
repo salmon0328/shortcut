@@ -52,12 +52,28 @@ __all__ = [
     "patch_node",
     "patch_edge",
     "remove_addition",
+    "remove_entity",
     "set_override",
     "clear_override",
     "empty_overrides",
 ]
 
-SECTIONS = ("nodes", "edges", "added_nodes", "added_edges")
+SECTIONS = (
+    "nodes",
+    "edges",
+    "added_nodes",
+    "added_edges",
+    # Surveyed places and links somebody has deleted. Recorded as a tombstone
+    # rather than cut out of campus_graph.json, because the app never writes
+    # the survey - that stays a deliberate act, reviewed as a git diff. So a
+    # deletion behaves like every other change here: live immediately, listed
+    # under pending, and folded into the survey by the graduation script.
+    #
+    # Keyed by id like the other sections. The value is a record about the
+    # removal rather than fields to apply.
+    "removed_nodes",
+    "removed_edges",
+)
 
 # Only these may be changed on something that already exists. Ids are absent
 # on purpose: renaming an id would orphan every edge and photo pointing at it.
@@ -259,6 +275,26 @@ def apply_overrides(
 
         updated_edges.append(edge)
 
+    # 4. Deletions, last: a place removed after being patched is still removed,
+    # and doing it here means nothing above has to know about tombstones.
+    gone_nodes = set(overrides.get("removed_nodes", {}))
+    gone_edges = set(overrides.get("removed_edges", {}))
+    if gone_nodes or gone_edges:
+        nodes = {
+            node_id: node for node_id, node in nodes.items() if node_id not in gone_nodes
+        }
+        updated_edges = [
+            edge
+            for edge in updated_edges
+            # A link to a place that is gone cannot stay: it would point at
+            # nothing, and the graph would refuse to build. Deleting a place
+            # therefore deletes what led to it, which is what somebody
+            # removing it means even when they have not thought it through.
+            if edge.id not in gone_edges
+            and edge.from_id not in gone_nodes
+            and edge.to_id not in gone_nodes
+        ]
+
     return build_graph(nodes, updated_edges, source_path=graph.source_path)
 
 
@@ -272,6 +308,25 @@ def _update(path: str | Path, section: str, key: str, value: Any) -> dict:
     overrides[section][key] = value
     save_overrides(path, overrides)
     return overrides
+
+
+def remove_entity(
+    path: str | Path, target_kind: str, target_id: str, *, reason: str = ""
+) -> dict:
+    """Record that a surveyed place or link should no longer be on the map.
+
+    A tombstone, not an edit to the survey. ``campus_graph.json`` is what
+    somebody measured in the building and the app never writes it; this says
+    "stop showing that" in the same live-then-graduate way as everything else,
+    so the deletion is visible under pending and becomes permanent only when a
+    person runs the graduation script and reads the diff.
+
+    Links to a removed place are not recorded here. They fall away when the
+    overrides are applied, so one tombstone stays correct however the map is
+    edited around it.
+    """
+    section = "removed_nodes" if target_kind == "node" else "removed_edges"
+    return _update(path, section, target_id, {"reason": reason} if reason else {})
 
 
 def add_node(path: str | Path, node_id: str, fields: dict[str, Any]) -> dict:

@@ -113,6 +113,13 @@ def _split(
     moving["added_nodes"] = copy.deepcopy(overrides["added_nodes"])
     moving["added_edges"] = copy.deepcopy(overrides["added_edges"])
 
+    # A deletion is the same kind of fact as an addition - somebody decided
+    # this place is not part of the building - so it graduates the same way.
+    # Left behind, it would live only in this machine's overrides file and
+    # come back for everybody else.
+    moving["removed_nodes"] = copy.deepcopy(overrides.get("removed_nodes", {}))
+    moving["removed_edges"] = copy.deepcopy(overrides.get("removed_edges", {}))
+
     for section in ("nodes", "edges"):
         for target_id, fields in overrides[section].items():
             if not isinstance(fields, dict):
@@ -161,6 +168,23 @@ def _graduated_graph_json(
         updated["nodes"].append({"id": node_id, **fields})
     for edge_id, fields in moving["added_edges"].items():
         updated["edges"].append({"id": edge_id, **fields})
+
+    # Removals last, so a place added and then deleted in the same session
+    # leaves nothing behind. Links to a removed place go with it: the graph
+    # refuses to build with an edge that ends nowhere, and the live map has
+    # been dropping them all along, so writing them out here is what keeps the
+    # survey and the map saying the same thing.
+    gone_nodes = set(moving["removed_nodes"])
+    gone_edges = set(moving["removed_edges"])
+    if gone_nodes or gone_edges:
+        updated["nodes"] = [n for n in updated["nodes"] if n["id"] not in gone_nodes]
+        updated["edges"] = [
+            e
+            for e in updated["edges"]
+            if e["id"] not in gone_edges
+            and e["from"] not in gone_nodes
+            and e["to"] not in gone_nodes
+        ]
 
     return updated
 
@@ -220,6 +244,10 @@ def _describe(moving: dict, staying: dict) -> None:
         print("Nothing to graduate: no surveyed changes are waiting.")
     else:
         print(f"Graduating {total_moving} change(s) into the survey:")
+        for node_id in moving["removed_nodes"]:
+            print(f"  - place  {node_id}  (and any link to it)")
+        for edge_id in moving["removed_edges"]:
+            print(f"  - link   {edge_id}")
         for node_id, fields in moving["added_nodes"].items():
             print(f"  + place  {node_id}  ({fields.get('name', 'unnamed')})")
         for edge_id, fields in moving["added_edges"].items():

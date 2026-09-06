@@ -329,8 +329,6 @@
           <button type="button" class="tab is-active" data-tab="reports">
             Reports
           </button>
-          <button type="button" class="tab" data-tab="add-place">Add place</button>
-          <button type="button" class="tab" data-tab="add-link">Add link</button>
           <button type="button" class="tab" data-tab="edit">Edit</button>
           <button type="button" class="tab" data-tab="map">Map</button>
           <button type="button" class="tab" data-tab="import">Import</button>
@@ -356,6 +354,16 @@
         <p id="map-status" class="status" hidden></p>
 
         <!-- --------------------- add a place ---------------------- -->
+        <!-- One tab, three jobs. The sub-nav shows only while Edit is the
+             open tab; main.js owns which panel below it is visible. -->
+        <div class="subtabs" id="edit-subtabs" hidden>
+          <button type="button" class="subtab is-active" data-edit="edit">
+            Edit or remove
+          </button>
+          <button type="button" class="subtab" data-edit="add-place">Add place</button>
+          <button type="button" class="subtab" data-edit="add-link">Add link</button>
+        </div>
+
         <div id="admin-tab-add-place" hidden>
           <form id="add-node-form" class="card" autocomplete="off">
             <h3>Add a place</h3>
@@ -561,9 +569,13 @@
             <div id="inspect-panel" hidden>
               <div id="inspect-fields"></div>
               <button type="button" id="inspect-save" class="primary">Save changes</button>
-              <button type="button" id="inspect-delete" class="danger-outline" hidden>
-                Remove this addition
+              <button type="button" id="inspect-delete" class="danger-outline">
+                Remove
               </button>
+              <p class="hint" id="inspect-delete-hint">
+                Removing a place removes every link to it as well. Nothing is
+                written to the survey until somebody graduates it.
+              </p>
 
               <h3>Photos</h3>
               <div id="photo-list" class="photo-list"></div>
