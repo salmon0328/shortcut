@@ -91,7 +91,9 @@ class Report:
     status: ReportStatus
     submitted_at: str
     reviewed_at: str | None = None
-    # Reserved for the photo work; nothing writes it yet.
+    #: A photograph filed with this submission, if the reporter took one.
+    #: Evidence of the problem at a moment, not a picture of the place - see
+    #: :data:`shortcut.photo_store.PhotoKind`.
     photo_id: str | None = None
 
     @property
@@ -110,8 +112,12 @@ class ReportGroup:
     confirmations: int
     report_ids: tuple[str, ...]
     notes: tuple[str, ...]
-    first_submitted_at: str
-    latest_submitted_at: str
+    #: Photos filed with these reports, oldest first. Evidence of the problem
+    #: rather than pictures of the place, which is why they are carried on the
+    #: group instead of looked up from the place's own photos.
+    photo_ids: tuple[str, ...] = ()
+    first_submitted_at: str = ""
+    latest_submitted_at: str = ""
 
     @property
     def blocks_routes(self) -> bool:
@@ -277,6 +283,9 @@ class ReportStore:
             confirmations=len(ordered),
             report_ids=tuple(report.id for report in ordered),
             notes=tuple(report.notes for report in ordered if report.notes.strip()),
+            photo_ids=tuple(
+                report.photo_id for report in ordered if report.photo_id
+            ),
             first_submitted_at=first.submitted_at,
             latest_submitted_at=ordered[-1].submitted_at,
         )

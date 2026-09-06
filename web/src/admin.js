@@ -35,12 +35,17 @@ function makeButton(label, className, onClick) {
 }
 
 /**
- * A picture of the place, if the map has one.
+ * The picture on the card: what a reporter photographed, or failing that
+ * what the place looks like.
  *
- * Reports do not carry their own photos yet, so the queue shows whatever
- * has already been photographed at that spot: enough for an admin to
- * recognise where a report is about. Starts as a placeholder and swaps in
- * the image once it is known to exist, so the card never waits on it.
+ * The order matters. A photo filed *with* the report is evidence of the
+ * problem being reported, and it is the single most useful thing an
+ * administrator can be shown before deciding. A photo of the place is a
+ * distant second — it says where, not what — so it is only the fallback, and
+ * the two are labelled differently so nobody mistakes one for the other.
+ *
+ * Starts as a placeholder and swaps the image in once it is known to exist,
+ * so the card never waits on a fetch.
  */
 function thumbnailFor(group) {
   const empty = document.createElement("div");
@@ -53,15 +58,39 @@ function thumbnailFor(group) {
     '<path d="M5 17l4.5-4.5 3 3 2.5-2.5L19 17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>' +
     "</svg>";
 
+  const show = (src, alt, isEvidence) => {
+    const holder = document.createElement("div");
+    holder.className = "report-thumb-holder";
+
+    const image = document.createElement("img");
+    image.className = "report-thumb";
+    image.src = src;
+    image.alt = alt;
+    image.loading = "lazy";
+    holder.appendChild(image);
+
+    const tag = document.createElement("span");
+    tag.className = `thumb-tag ${isEvidence ? "evidence" : "place"}`;
+    tag.textContent = isEvidence ? "Reported" : "The place";
+    holder.appendChild(tag);
+
+    empty.replaceWith(holder);
+  };
+
+  const photoIds = group.photo_ids ?? [];
+  if (photoIds.length > 0) {
+    show(
+      photoUrl(`/photos/${encodeURIComponent(photoIds[0])}/file`),
+      `Photo filed with a report about ${group.target_name}`,
+      true
+    );
+    return empty;
+  }
+
   fetchPhotos(group.target_kind, group.target_id)
     .then((photos) => {
       if (!Array.isArray(photos) || photos.length === 0) return;
-      const image = document.createElement("img");
-      image.className = "report-thumb";
-      image.src = photoUrl(photos[0].url);
-      image.alt = group.target_name;
-      image.loading = "lazy";
-      empty.replaceWith(image);
+      show(photoUrl(photos[0].url), group.target_name, false);
     })
     .catch(() => {
       // No photo is not an error worth reporting; the placeholder stays.

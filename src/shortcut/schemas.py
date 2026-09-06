@@ -550,6 +550,7 @@ class ReportRequest(BaseModel):
                 "target_id": "Hive_B5_002",
                 "condition": "blocked",
                 "notes": "Barriers across the corridor by the lockers.",
+                "photo_id": None,
             }
         },
     )
@@ -564,6 +565,13 @@ class ReportRequest(BaseModel):
     )
     condition: Condition = Field(
         description=f"What is wrong. One of: {', '.join(CONDITIONS)}."
+    )
+    photo_id: str | None = Field(
+        default=None,
+        description=(
+            "A photo of the problem, uploaded to POST /reports/photo first. "
+            "Optional: a report with no picture is still a report."
+        ),
     )
     notes: str = Field(
         default="",
@@ -623,6 +631,10 @@ class ReportGroupSummary(BaseModel):
     )
     report_ids: list[str]
     notes: list[str] = Field(description="The notes people left, oldest first.")
+    photo_ids: list[str] = Field(
+        default_factory=list,
+        description="Photos filed with these reports, oldest first.",
+    )
     blocks_routes: bool = Field(
         description="Whether approving this would close the place to routing."
     )
@@ -642,6 +654,7 @@ class ReportGroupSummary(BaseModel):
             confirmations=group.confirmations,
             report_ids=list(group.report_ids),
             notes=list(group.notes),
+            photo_ids=list(group.photo_ids),
             blocks_routes=group.blocks_routes,
             first_submitted_at=group.first_submitted_at,
             latest_submitted_at=group.latest_submitted_at,
@@ -721,6 +734,14 @@ class PhotoSummary(BaseModel):
     size_bytes: int
     uploaded_at: str
     url: str = Field(description="Where to fetch the image itself.")
+    kind: str = Field(
+        default="place",
+        description=(
+            "'place' for a picture of the building, shown as a direction while "
+            "somebody walks. 'report' for evidence of a problem, which is only "
+            "ever shown beside the report it came with."
+        ),
+    )
 
     @classmethod
     def from_photo(cls, photo: Photo) -> "PhotoSummary":
@@ -737,6 +758,7 @@ class PhotoSummary(BaseModel):
             size_bytes=photo.size_bytes,
             uploaded_at=photo.uploaded_at,
             url=f"/photos/{photo.id}/file",
+            kind=photo.kind,
         )
 
 

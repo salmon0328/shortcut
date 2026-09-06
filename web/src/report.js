@@ -4,7 +4,7 @@
 // backend group two people's reports about the same spot without having to
 // reconcile spelling.
 
-import { submitReport } from "./api.js";
+import { submitReport, uploadReportPhoto } from "./api.js";
 import { edgesTouching, nodeName, otherEnd } from "./data.js";
 import { createSearchBox } from "./searchBox.js";
 
@@ -14,6 +14,11 @@ const placeSuggestions = document.querySelector("#report-place-suggestions");
 const whereField = document.querySelector("#report-where-field");
 const whereSelect = document.querySelector("#report-where");
 const notesInput = document.querySelector("#report-notes");
+const photoInput = document.querySelector("#report-photo");
+const photoLabel = document.querySelector("#report-photo-label");
+const photoPreview = document.querySelector("#report-photo-preview");
+const photoImage = document.querySelector("#report-photo-image");
+const photoRemove = document.querySelector("#report-photo-remove");
 const submitButton = document.querySelector("#report-submit");
 const statusMessage = document.querySelector("#report-status");
 
@@ -26,6 +31,45 @@ function showStatus(text, kind) {
 function hideStatus() {
   statusMessage.hidden = true;
 }
+
+// --- the optional photo ---------------------------------------------------
+//
+// Held as a File and uploaded on submit, not on selection. Uploading early
+// would be faster to feel, but it would also litter the store with evidence
+// of reports nobody ever finished sending - and somebody who changes their
+// mind after taking a photo has told us nothing they meant to keep.
+
+/** The object URL currently shown, so it can be revoked when replaced. */
+let previewUrl = null;
+
+function showPhoto(file) {
+  if (previewUrl) URL.revokeObjectURL(previewUrl);
+  previewUrl = URL.createObjectURL(file);
+  photoImage.src = previewUrl;
+  photoPreview.hidden = false;
+  photoLabel.textContent = "Choose a different photo";
+}
+
+function clearPhoto() {
+  if (previewUrl) URL.revokeObjectURL(previewUrl);
+  previewUrl = null;
+  photoInput.value = "";
+  photoImage.removeAttribute("src");
+  photoPreview.hidden = true;
+  photoLabel.textContent = "Add a photo (optional)";
+}
+
+photoInput.addEventListener("change", () => {
+  const file = photoInput.files[0];
+  if (file) {
+    showPhoto(file);
+    hideStatus();
+  } else {
+    clearPhoto();
+  }
+});
+
+photoRemove.addEventListener("click", clearPhoto);
 
 /**
  * Offer the place itself, plus each corridor leading away from it.
@@ -81,6 +125,7 @@ export function resetForm() {
   notesInput.value = "";
   whereSelect.replaceChildren();
   whereField.hidden = true;
+  clearPhoto();
   hideStatus();
 }
 
@@ -104,11 +149,24 @@ form.addEventListener("submit", async (event) => {
   submitButton.disabled = true;
   submitButton.textContent = "Sending…";
   try {
+    // The photo first, because the report carries its id. A photo that fails
+    // to upload is reported as exactly that and the report is not sent, so
+    // nobody is left thinking they filed a picture they did not.
+    let photoId = null;
+    const file = photoInput.files[0];
+    if (file) {
+      submitButton.textContent = "Uploading photo…";
+      const photo = await uploadReportPhoto(file, targetKind, targetId);
+      photoId = photo.id;
+      submitButton.textContent = "Sending…";
+    }
+
     await submitReport({
       target_kind: targetKind,
       target_id: targetId,
       condition: condition.value,
       notes: notesInput.value.trim(),
+      photo_id: photoId,
     });
     resetForm();
     showStatus(
