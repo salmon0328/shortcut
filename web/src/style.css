@@ -1397,6 +1397,83 @@ textarea:focus-visible {
   margin: 0;
 }
 
+.queue-buttons {
+  display: flex;
+  flex-shrink: 0;
+  gap: 0.5rem;
+}
+
+/* --- what the Verifier concluded, and what it concluded it from --- */
+/*
+   Spans both columns of .report-card, under everything else: it is the
+   agent's working, and it belongs below the thing it is working on rather
+   than beside the photo.
+*/
+.verdict {
+  grid-column: 1 / -1;
+  margin-top: 0.6rem;
+  padding: 0.65rem 0.8rem;
+  border-radius: 0.5rem;
+  border-left: 3px solid var(--line);
+  background: var(--page);
+  font-size: 0.85rem;
+}
+
+/* Left for a person is the outcome that wants attention, so it is the one
+   that gets a colour. An agent quietly agreeing with itself does not. */
+.verdict-escalated {
+  border-left-color: var(--warn);
+  background: var(--warn-soft);
+}
+
+.verdict-headline {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.verdict-badge {
+  flex-shrink: 0;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.verdict-sums {
+  margin: 0.4rem 0 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.verdict-weights {
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.verdict-weights li {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.verdict-weights strong {
+  flex-shrink: 0;
+  min-width: 2.4rem;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
 /* One report group: photo on the left, what and how many on the right. */
 .report-card {
   display: grid;

@@ -340,11 +340,18 @@
           <div class="queue-head">
             <p class="hint">
               Grouped by the problem described. Approving applies it to the map
-              for everyone.
+              for everyone. "Check" weighs what people wrote against what
+              closing the place would cost — it settles the clear cases and
+              leaves the consequential ones here for you.
             </p>
-            <button type="button" id="refresh-queue" class="secondary small">
-              Refresh
-            </button>
+            <div class="queue-buttons">
+              <button type="button" id="verify-all" class="secondary small">
+                Check all
+              </button>
+              <button type="button" id="refresh-queue" class="secondary small">
+                Refresh
+              </button>
+            </div>
           </div>
 
           <p id="admin-status" class="status" hidden></p>

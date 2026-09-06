@@ -27,7 +27,7 @@ import re
 from pydantic import BaseModel
 
 from shortcut.ai.bedrock import Image, LlmError
-from shortcut.ai.schemas import ParsedIntent
+from shortcut.ai.schemas import ParsedIntent, ReportReading, ReportWeight
 from shortcut.ai.usage import TokenUsage
 
 __all__ = ["KeywordLlm"]
@@ -166,12 +166,97 @@ def read_intent(text: str) -> ParsedIntent:
     )
 
 
+# --------------------------------------------------------------------------
+# Rating reported problems, without a model
+# --------------------------------------------------------------------------
+#
+# Deliberately cruder than the parser's rules above, and it has to be: how
+# much a written account is worth is a judgement, and there is no honest
+# keyword for it. What can be measured without reading is whether somebody
+# wrote anything, how much, and whether it is obviously not a report - so
+# that is all this measures, and it never reaches 1.0.
+#
+# The effect on the whole feature is the point rather than an accident.
+# Offline, weights stay low, totals stay under the blocking threshold, and
+# every consequential report lands in the queue for a person. A verifier with
+# no model does not approve things; it declines to be the reason something
+# was approved.
+
+# What a note says when it is not a report: a test, a joke, an empty gesture.
+_NOT_A_REPORT = re.compile(
+    r"^\s*(?:test(?:ing)?|asdf|idk|\?+|n/?a|none|nil|lol|haha|xd|"
+    r"nothing|no comment)\s*[.!]?\s*$",
+    re.I,
+)
+
+# Words that make an account checkable rather than merely asserted.
+_SPECIFIC = re.compile(
+    r"\b(?:sign|signage|notice|barrier|tape|cone|contractor|engineer|"
+    r"works|closed until|out of order|since|this morning|yesterday|"
+    r"queue|ankle|deep|water|leak|puddle|wet floor|level \d|lift \d)\b",
+    re.I,
+)
+
+_HEDGED = re.compile(
+    r"\b(?:i think|maybe|might be|probably|not sure|apparently|"
+    r"someone said|heard that|reckon|possibly)\b",
+    re.I,
+)
+
+
+def rate_note(text: str) -> tuple[float, str]:
+    """What one written account is worth, by rule. Exposed for testing."""
+    written = text.strip()
+    if not written:
+        # Somebody still filed it, which is not nothing - but it is not
+        # evidence either, so it can never carry a report on its own.
+        return 0.3, "No note written, so only the submission itself counts."
+    if _NOT_A_REPORT.match(written):
+        return 0.0, "Not a description of a problem."
+    if _HEDGED.search(written):
+        return 0.2, "Second-hand or hedged."
+    if _SPECIFIC.search(written):
+        return 0.8, "Names something checkable."
+    if len(written) >= 25:
+        return 0.6, "A plausible account, without much detail."
+    return 0.4, "Very short, but says something."
+
+
+def read_reports(user: str) -> ReportReading:
+    """Rate every submission in a verify message, by rule."""
+    weights: list[ReportWeight] = []
+    for line in user.splitlines():
+        # The message writes each one as "- id <id>: <what they wrote>".
+        if not line.startswith("- id "):
+            continue
+        report_id, _, written = line[len("- id ") :].partition(": ")
+        if written.strip() == "(no note written)":
+            written = ""
+        weight, why = rate_note(written)
+        weights.append(
+            ReportWeight(report_id=report_id.strip(), weight=weight, why=why)
+        )
+
+    return ReportReading(
+        weights=weights,
+        # Both left at their trusting defaults on purpose. Whether notes
+        # describe the condition claimed, and whether two of them contradict
+        # each other, are exactly the readings a regular expression cannot
+        # make - and guessing either would send reports to the wrong outcome
+        # with an offline stand-in's confidence behind it.
+        describes_condition=True,
+        summary=f"{len(weights)} submission(s), rated offline without a model.",
+        contradiction="",
+    )
+
+
 class KeywordLlm:
     """An :class:`~shortcut.ai.bedrock.LlmPort` backed by regular expressions.
 
-    Answers the parse call and nothing else. Anything needing real reading -
-    the photo work especially - raises rather than returning a confident
-    guess, because a wrong fact about a corridor is worse than no fact.
+    Answers the two text calls - reading a route request, and rating reported
+    problems - and nothing else. Anything needing real reading, the photo work
+    especially, raises rather than returning a confident guess, because a
+    wrong fact about a corridor is worse than no fact.
     """
 
     @property
@@ -181,15 +266,18 @@ class KeywordLlm:
     def structured(
         self, schema: type[BaseModel], *, purpose: str, system: str, user: str
     ) -> tuple[BaseModel, TokenUsage]:
-        if schema is not ParsedIntent:
-            raise LlmError(
-                f"{purpose}: the offline reader only handles route requests, "
-                f"not {schema.__name__}. Set MOCK_MODE=false and configure "
-                f"Bedrock to use this."
-            )
-        # The user turn is "Student request:\n<text>"; take what follows.
-        text = user.split("\n", 1)[-1]
-        return read_intent(text), TokenUsage(calls=1, model_id=self.model_id)
+        if schema is ParsedIntent:
+            # The user turn is "Student request:\n<text>"; take what follows.
+            text = user.split("\n", 1)[-1]
+            return read_intent(text), TokenUsage(calls=1, model_id=self.model_id)
+
+        if schema is ReportReading:
+            return read_reports(user), TokenUsage(calls=1, model_id=self.model_id)
+
+        raise LlmError(
+            f"{purpose}: the offline reader does not handle {schema.__name__}. "
+            f"Set MOCK_MODE=false and configure Bedrock to use this."
+        )
 
     def vision(
         self,

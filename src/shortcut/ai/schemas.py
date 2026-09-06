@@ -11,6 +11,8 @@ Two rules hold across this whole file:
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from shortcut.ai.usage import TokenUsage
@@ -23,6 +25,10 @@ __all__ = [
     "ParsedIntent",
     "PlaceCandidate",
     "PlaceChoice",
+    "ReportImpact",
+    "ReportReading",
+    "ReportVerdict",
+    "ReportWeight",
     "RoutePreferences",
 ]
 
@@ -194,6 +200,113 @@ class ParseRequestBody(Strict):
         default=None,
         description="What the route controls already show, if anything.",
     )
+
+
+# --------------------------------------------------------------------------
+# Judging reported problems
+# --------------------------------------------------------------------------
+
+
+class ReportWeight(Strict):
+    """How much one submission should count towards believing a problem.
+
+    A weight, not a verdict. The model reads what somebody typed and says how
+    much it is worth; the *decision* is arithmetic done afterwards against a
+    threshold in :mod:`shortcut.ai.config`. Keeping those apart is the same
+    split as the parser's - the model reads, the code decides - and it is what
+    stops a persuasive sentence from talking its way past a limit.
+    """
+
+    report_id: str = Field(description="Which submission this is about.")
+    weight: float = Field(
+        ge=0.0,
+        le=1.0,
+        description=(
+            "1.0 for a first-hand, specific, checkable account ('lift 2 has an "
+            "out-of-order sign, engineer on site'). Around 0.5 for a plausible "
+            "but bare one ('lift broken'). 0.0 for anything vague, empty, "
+            "joking, or describing something other than the reported problem."
+        ),
+    )
+    why: str = Field(
+        max_length=200, description="One short sentence of justification."
+    )
+
+
+class ReportReading(Strict):
+    """What the model made of every submission about one problem."""
+
+    weights: list[ReportWeight] = Field(
+        description="One entry per submission, in the order they were given."
+    )
+    describes_condition: bool = Field(
+        description=(
+            "Whether the notes actually describe the condition claimed. False "
+            "when people report a lift as 'blocked' but describe it as merely "
+            "busy - the problem may be real and still be filed as the wrong "
+            "kind."
+        )
+    )
+    summary: str = Field(
+        max_length=300,
+        description="What these submissions collectively claim, in one or two lines.",
+    )
+    contradiction: str = Field(
+        default="",
+        max_length=300,
+        description=(
+            "Where the submissions disagree with each other, if they do. Empty "
+            "when they agree."
+        ),
+    )
+
+
+class ReportImpact(Strict):
+    """What approving the report would do to routing, worked out by arithmetic."""
+
+    blocks_routes: bool
+    cut_off: list[str] = Field(
+        default_factory=list,
+        description="Places that would lose every way in. Empty is the normal case.",
+    )
+    detour_seconds: float | None = Field(
+        default=None, description="How much longer the way round would be."
+    )
+    describes: str = Field(default="", description="The same, as one readable line.")
+
+
+class ReportVerdict(Strict):
+    """What the Verifier decided, and everything it decided from.
+
+    Every number that went into the decision is here, because an agent that
+    changes the map has to be answerable for it afterwards. A reviewer looking
+    at this should be able to disagree with the outcome and see exactly which
+    step they disagree with.
+    """
+
+    key: str
+    action: Literal["approved", "rejected", "escalated"] = Field(
+        description=(
+            "'escalated' means the agent declined to decide and left it in the "
+            "queue for a person - the outcome for anything well-corroborated "
+            "but consequential, which is most of what matters."
+        )
+    )
+    weight: float = Field(description="The submissions' weights, added up.")
+    threshold: float = Field(description="What the weight had to beat, after any raise.")
+    base_threshold: float = Field(description="What it would have been, before.")
+    raised_because: str = Field(
+        default="",
+        description="Why the bar went up, when it did. Empty when it did not.",
+    )
+    impact: ReportImpact
+    reading: ReportReading
+    why: str = Field(description="The decision in one sentence, for a person to read.")
+    applied: bool = Field(
+        default=False,
+        description="Whether the map actually changed. False for anything not approved.",
+    )
+    usage: TokenUsage = Field(default_factory=TokenUsage.empty)
 
 
 # --------------------------------------------------------------------------
