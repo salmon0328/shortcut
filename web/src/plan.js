@@ -182,6 +182,30 @@ function renderSteps() {
     if (index === currentStepIndex) item.classList.add("is-current");
     if (index < currentStepIndex) item.classList.add("is-done");
 
+    // Any step can be jumped to. Walking a route is not a wizard: somebody
+    // reading ahead to see what is coming, or back to check what they just
+    // passed, should not have to click through every step in between. Back
+    // and Next stay for walking it in order, which is still the common case.
+    if (index !== currentStepIndex) {
+      item.classList.add("is-jumpable");
+      item.tabIndex = 0;
+      item.setAttribute("role", "button");
+      item.setAttribute("aria-label", `Step ${index + 1}: ${step.instruction}`);
+
+      const jump = () => {
+        currentStepIndex = index;
+        renderSteps();
+      };
+      item.addEventListener("click", jump);
+      item.addEventListener("keydown", (event) => {
+        // Enter and Space are what a button answers to, and this is one.
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          jump();
+        }
+      });
+    }
+
     const heading = document.createElement("p");
     heading.className = "step-instruction";
     heading.textContent = step.instruction;
@@ -222,15 +246,38 @@ function renderSteps() {
   });
 
   const arrived = currentStepIndex >= currentSteps.length;
+
+  // Shown whether or not it has been reached, so the end of the journey can
+  // be jumped to like any other step - and so the list does not change length
+  // underneath somebody clicking down it.
+  const done = document.createElement("li");
+  done.className = "step step-arrived";
+  done.textContent = "You have arrived.";
+
   if (arrived) {
-    const done = document.createElement("li");
-    done.className = "step is-current step-arrived";
-    done.textContent = "You have arrived.";
+    done.classList.add("is-current");
     backButton.className = "secondary small step-back";
     backButton.hidden = false;
     done.appendChild(backButton);
-    stepsList.appendChild(done);
+  } else {
+    done.classList.add("is-jumpable");
+    done.tabIndex = 0;
+    done.setAttribute("role", "button");
+    done.setAttribute("aria-label", "Jump to the end of the journey");
+
+    const jump = () => {
+      currentStepIndex = currentSteps.length;
+      renderSteps();
+    };
+    done.addEventListener("click", jump);
+    done.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        jump();
+      }
+    });
   }
+  stepsList.appendChild(done);
 
   // How long is left, counted from the step being walked. Waits count: a
   // lift you have to stand around for is part of getting there.

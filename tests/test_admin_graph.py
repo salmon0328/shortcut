@@ -371,13 +371,93 @@ def test_removing_a_place_takes_its_photos_with_it(client: TestClient) -> None:
     assert client.get("/photos").json() == []
 
 
-def test_a_surveyed_place_cannot_be_removed(client: TestClient) -> None:
-    """Deleting measured data here would put the map out of step with the
-    building. Closing one is what 'blocked' is for."""
-    response = client.delete("/admin/additions/node/Hive_B5_A")
+def test_a_surveyed_place_can_be_removed_too(client: TestClient) -> None:
+    """This used to be refused outright, on the grounds that deleting measured
+    data would put the map out of step with the building. The rule was too
+    strong: a place can be wrong, or read out of a drawing that turned out to
+    be a redraw, and the map needs a way to say so. What protects the survey
+    is not refusing - it is that the deletion is a tombstone in the overrides
+    file, live at once and permanent only once somebody graduates it."""
+    response = client.delete("/admin/nodes/Hive_B5_A")
 
-    assert response.status_code == 404
-    assert "Hive_B5_A" in node_ids(client)
+    assert response.status_code == 200
+    assert "Hive_B5_A" not in node_ids(client)
+
+
+def test_removing_a_surveyed_place_does_not_touch_the_survey(
+    client: TestClient, graph_path: Path
+) -> None:
+    before = graph_path.read_text(encoding="utf-8")
+
+    client.delete("/admin/nodes/Hive_B5_A")
+
+    assert graph_path.read_text(encoding="utf-8") == before
+
+
+def test_removing_a_surveyed_place_shows_up_as_pending(client: TestClient) -> None:
+    """The one change that cannot be spotted by looking at the map, since the
+    place is simply not there any more. The pending list is where it shows."""
+    client.delete("/admin/nodes/Hive_B5_A")
+
+    pending = client.get("/admin/pending").json()
+    removal = next(c for c in pending["changes"] if c["id"] == "Hive_B5_A")
+    assert removal["change"] == "removed"
+    assert pending["graduating"] >= 1, "a deletion is for the survey, not just live"
+
+
+def test_removing_a_surveyed_place_takes_its_links_with_it(
+    client: TestClient,
+) -> None:
+    """An edge whose end does not exist makes the graph refuse to build, so
+    this is not tidiness - leaving them would break the map outright."""
+    touching = [
+        edge["id"]
+        for edge in client.get("/edges").json()
+        if "Hive_B5_A" in (edge["from_id"], edge["to_id"])
+    ]
+    assert touching, "sanity: the lift lobby is joined to things"
+
+    client.delete("/admin/nodes/Hive_B5_A")
+
+    assert not set(touching) & set(edge_ids(client))
+
+
+def test_a_surveyed_link_can_be_removed(client: TestClient) -> None:
+    edge_id = client.get("/edges").json()[0]["id"]
+
+    response = client.delete(f"/admin/edges/{edge_id}")
+
+    assert response.status_code == 200
+    assert edge_id not in edge_ids(client)
+
+
+def test_removing_a_link_leaves_the_places_it_joined(client: TestClient) -> None:
+    """Only the walk between them is gone; both ends are still real places."""
+    edge = client.get("/edges").json()[0]
+
+    client.delete(f"/admin/edges/{edge['id']}")
+
+    assert edge["from_id"] in node_ids(client)
+    assert edge["to_id"] in node_ids(client)
+
+
+def test_removing_something_that_is_not_there_is_a_404(client: TestClient) -> None:
+    assert client.delete("/admin/nodes/Hive_B9_NOWHERE").status_code == 404
+    assert client.delete("/admin/edges/no_such_edge").status_code == 404
+
+
+def test_removing_an_addition_leaves_no_tombstone_behind(
+    client: TestClient, overrides_path: Path
+) -> None:
+    """Un-adding beats recording a deletion where both would work: there was
+    never anything in the survey for the tombstone to contradict."""
+    add_node(client, connections=[CONNECTION])
+
+    client.delete("/admin/nodes/Hive_B5_J")
+
+    overrides = json.loads(overrides_path.read_text(encoding="utf-8"))
+    assert "Hive_B5_J" not in overrides.get("added_nodes", {})
+    assert "Hive_B5_J" not in overrides.get("removed_nodes", {})
 
 
 # --------------------------------------------------------------------------

@@ -1137,6 +1137,22 @@ textarea:focus-visible {
   border-radius: var(--radius);
 }
 
+/* Any step but the one being walked can be jumped to, so it has to look like
+   something you can press rather than a line of text that happens to react. */
+.step.is-jumpable {
+  cursor: pointer;
+}
+
+.step.is-jumpable:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.step.is-jumpable:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 .step-instruction {
   margin: 0;
   font-weight: 600;
@@ -1286,6 +1302,38 @@ textarea:focus-visible {
   margin-bottom: 0.75rem;
   overflow-x: auto;
   scrollbar-width: none;
+}
+
+/* The three jobs inside the Edit tab. Quieter than the tabs above them, so
+   the row reads as a choice within a screen rather than a second screen. */
+.subtabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.subtabs[hidden] {
+  display: none;
+}
+
+.subtab {
+  flex: 0 0 auto;
+  width: auto;
+  margin: 0;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  cursor: pointer;
+}
+
+.subtab.is-active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
 }
 
 .tab {
@@ -1469,6 +1517,14 @@ code {
   object-fit: cover;
   background: var(--line);
   border-radius: 0.375rem;
+}
+
+/* The direction is the one field on a stored photo worth changing, so it is
+   a control on the card rather than a line of text describing one. */
+.photo-facing {
+  margin-top: 0.4rem;
+  padding: 0.3rem 0.4rem;
+  font-size: 0.8rem;
 }
 
 .photo-card figcaption {

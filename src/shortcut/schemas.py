@@ -1070,8 +1070,11 @@ class PendingChange(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     kind: Literal["node", "edge"]
-    change: Literal["added", "edited"] = Field(
-        description="Whether this is something new, or a change to surveyed data."
+    change: Literal["added", "edited", "removed"] = Field(
+        description=(
+            "Whether this is something new, a change to surveyed data, or "
+            "something surveyed that has been deleted."
+        )
     )
     id: str
     label: str = Field(description="Readable name, for showing in a list.")

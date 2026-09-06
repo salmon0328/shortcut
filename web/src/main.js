@@ -102,18 +102,35 @@ adminToggle.addEventListener("change", () => {
 
 const adminTabs = {
   reports: document.querySelector("#admin-tab-reports"),
-  "add-place": document.querySelector("#admin-tab-add-place"),
-  "add-link": document.querySelector("#admin-tab-add-link"),
   edit: document.querySelector("#admin-tab-edit"),
   import: document.querySelector("#admin-tab-import"),
   map: document.querySelector("#admin-tab-map"),
   pending: document.querySelector("#admin-tab-pending"),
 };
 
+// Adding and editing were three tabs of the same job, which made the row long
+// enough to push the rest off the edge. They are one tab now, with a sub-nav:
+// the panels are still three separate elements, only their visibility is
+// shared.
+const editPanels = {
+  edit: adminTabs.edit,
+  "add-place": document.querySelector("#admin-tab-add-place"),
+  "add-link": document.querySelector("#admin-tab-add-link"),
+};
+const editSubtabs = document.querySelector("#edit-subtabs");
+let editMode = "edit";
+
 function showAdminTab(name) {
+  const editing = name === "edit";
+
   for (const [key, element] of Object.entries(adminTabs)) {
-    element.hidden = key !== name;
+    if (key !== "edit") element.hidden = key !== name;
   }
+  editSubtabs.hidden = !editing;
+  for (const [key, element] of Object.entries(editPanels)) {
+    element.hidden = !editing || key !== editMode;
+  }
+
   for (const button of document.querySelectorAll(".tab")) {
     button.classList.toggle("is-active", button.dataset.tab === name);
   }
@@ -130,6 +147,16 @@ function showAdminTab(name) {
   } else {
     refreshMapEditor();
   }
+}
+
+for (const button of editSubtabs.querySelectorAll(".subtab")) {
+  button.addEventListener("click", () => {
+    editMode = button.dataset.edit;
+    for (const other of editSubtabs.querySelectorAll(".subtab")) {
+      other.classList.toggle("is-active", other === button);
+    }
+    showAdminTab("edit");
+  });
 }
 
 const floorMapCanvas = document.querySelector("#floor-map-canvas");
