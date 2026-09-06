@@ -192,7 +192,7 @@ def test_it_refuses_work_it_was_not_built_for() -> None:
     class SomethingElse(ParsedIntent):
         pass
 
-    with pytest.raises(LlmError, match="only handles route requests"):
+    with pytest.raises(LlmError, match="does not handle SomethingElse"):
         KeywordLlm().structured(
             SomethingElse, purpose=PARSE_VERSION, system=PARSE_SYSTEM, user="u"
         )

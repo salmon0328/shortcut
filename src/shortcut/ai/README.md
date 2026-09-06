@@ -8,8 +8,9 @@ about which is which, because the distinction is the claim the project makes.
 | `parser.py` | yes | **No.** Turns a sentence into a schema and decides nothing | Extraction step |
 | `photo_reader.py` *(not built)* | yes | **No.** Reads images, returns facts | Extraction step |
 | `ranker.py` *(not built)* | yes | **Yes.** Judges candidates, changes its own request, searches again | **Agent** |
-| `verifier.py` *(not built)* | yes | **Yes.** Chooses checks, writes to the shared map, adapts its threshold | **Agent** |
+| `verifier.py` | yes | **Yes.** Weighs evidence, prices the change, adapts its threshold, writes to the shared map | **Agent** |
 | `tools/astar.py` | no | It is a tool | Tool |
+| `impact.py` | no | It is a tool | Tool |
 
 ## What is built
 
@@ -22,7 +23,42 @@ about which is which, because the distinction is the claim the project makes.
 | `prompts.py` | Every prompt, versioned. When an accuracy number moves, the first question is whether the prompt changed |
 | `places.py` | "the lift" → a node id. Aliases, typos, and ambiguity **reported rather than guessed at** |
 | `parser.py` | One model call, no loop, no tools, no decisions |
+| `impact.py` | What closing a place would cost: who gets stranded, how long the way round is. Arithmetic, no model |
+| `verifier.py` | Rates reported problems, prices the change, decides or hands over |
 | `routes.py` | `GET /ai/health`, `POST /ai/parse` |
+
+The Verifier's own endpoints — `POST /reports/groups/{key}/verify` and
+`POST /reports/verify-all` — live in `api.py` beside the manual approve and
+reject, not here. Approving a report writes overrides and rebuilds the graph,
+which is `api.py`'s job and nothing this package should learn how to do. The
+agent decides; `_review_group` applies. So a report the agent approved is
+indistinguishable afterwards from one a person approved: one way for the map
+to change, not two that can drift apart.
+
+## The Verifier, and why it escalates so much
+
+It reads every submission about one problem and rates each (one model call),
+adds the ratings up, asks `impact.py` what closing the place would actually
+cost, **raises its own bar if the answer is bad enough**, then approves,
+rejects, or hands the whole thing to a person.
+
+Three rules hold it together:
+
+**The model rates, the code decides.** Weights come back from the model; the
+comparison against `AUTO_MERGE_THRESHOLD_BLOCKING` happens in Python, against
+a number the model never sees. Report notes are text typed by strangers, and
+a model asked to output "approve" will eventually be talked into outputting
+"approve". Several tests hand it a reading arguing loudly for approval and
+check the arithmetic still refuses.
+
+**Closing something costs more than warning about it.** A wrongly closed
+corridor sends somebody the long way round a building in the rain; a wrongly
+flagged busy lobby costs them nothing. Hence 2.0 against 1.0.
+
+**Escalating is a real outcome, not a failure.** Anything that would leave a
+place with no way in goes to a person no matter how many people reported it.
+That is the one threshold the agent cannot move, and it is what makes the rest
+safe to automate.
 
 ## Two design decisions worth knowing
 

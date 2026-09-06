@@ -726,6 +726,126 @@ def reject_report_group(
 
 
 # --------------------------------------------------------------------------
+# Letting the Verifier work the queue
+# --------------------------------------------------------------------------
+#
+# Guarded the same way the /ai router is, and for the same reason: a machine
+# without requirements-ai.txt installed serves every other endpoint and passes
+# the whole core suite. Without the extras these two routes simply do not
+# exist, and the manual approve/reject above still does everything it did.
+#
+# The endpoints live here rather than in shortcut/ai/routes.py because
+# approving a report writes overrides and rebuilds the graph, which is this
+# module's job and nothing the AI package should learn how to do. The agent
+# decides; _review_group applies. Same split as everywhere else here.
+
+try:
+    from shortcut.ai.bedrock import LlmError
+    from shortcut.ai.routes import get_llm
+    from shortcut.ai.schemas import ReportVerdict
+    from shortcut.ai.verifier import verify_group
+except ImportError:  # pragma: no cover - only without the AI extras
+    REPORT_VERIFIER_ENABLED = False
+else:
+    REPORT_VERIFIER_ENABLED = True
+
+    def _verify_one(
+        request: Request,
+        key: str,
+        reports: ReportStore,
+        graph: CampusGraph,
+        llm,
+    ) -> ReportVerdict:
+        """Judge one group, and carry out whatever was decided."""
+        group = next(
+            (g for g in reports.pending_groups() if g.key == key), None
+        )
+        if group is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No pending reports under {key!r}.",
+            )
+
+        waiting = [r for r in reports.all(status="pending") if r.group_key == key]
+        verdict = verify_group(
+            graph,
+            llm,
+            group,
+            waiting,
+            _describe_target(graph, group.target_kind, group.target_id),
+        )
+
+        # Escalated means the agent declined to decide, so the group stays
+        # exactly where it was: pending, in the queue, for a person.
+        if verdict.action in ("approved", "rejected"):
+            _review_group(request, key, verdict.action, reports)
+            return verdict.model_copy(update={"applied": True})
+        return verdict
+
+    @app.post(
+        "/reports/groups/{key}/verify",
+        response_model=ReportVerdict,
+        summary="Have the Verifier judge one reported problem",
+        responses={503: {"description": "The language model could not be reached."}},
+    )
+    def verify_report_group(
+        key: str,
+        request: Request,
+        reports: ReportStore = Depends(get_reports),
+        graph: CampusGraph = Depends(get_graph),
+        llm=Depends(get_llm),
+    ) -> ReportVerdict:
+        """Weigh what people wrote, price what closing it would cost, decide.
+
+        Approving and rejecting go through exactly the same code an
+        administrator's click does, so a report the agent approved is
+        indistinguishable afterwards from one a person approved - which is
+        deliberate. There is one way for the map to change, not two.
+        """
+        try:
+            return _verify_one(request, key, reports, graph, llm)
+        except LlmError as error:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=(
+                    f"Could not judge that report: {error} "
+                    "Approve or reject it yourself instead."
+                ),
+            ) from error
+
+    @app.post(
+        "/reports/verify-all",
+        response_model=list[ReportVerdict],
+        summary="Have the Verifier work through the whole queue",
+    )
+    def verify_all_report_groups(
+        request: Request,
+        reports: ReportStore = Depends(get_reports),
+        graph: CampusGraph = Depends(get_graph),
+        llm=Depends(get_llm),
+    ) -> list[ReportVerdict]:
+        """Judge everything waiting, and leave whatever it would not decide.
+
+        One model call per problem, not per submission. A group the model
+        cannot be reached for is skipped rather than failing the run: the
+        point of working the queue is to shorten it, and one unreachable
+        moment should not undo the ones that did get judged.
+        """
+        verdicts: list[ReportVerdict] = []
+        # Keys taken up front: approving rebuilds the graph and empties the
+        # group out of pending_groups(), so iterating that list live would
+        # skip entries underneath itself.
+        for key in [group.key for group in reports.pending_groups()]:
+            try:
+                verdicts.append(
+                    _verify_one(request, key, reports, get_graph(request), llm)
+                )
+            except LlmError as error:
+                logger.warning("Could not judge %s: %s", key, error)
+        return verdicts
+
+
+# --------------------------------------------------------------------------
 # Photos
 # --------------------------------------------------------------------------
 

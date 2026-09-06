@@ -4,12 +4,20 @@
 // several people's confirmations. Approving a row applies it to the map for
 // everyone; rejecting leaves the map exactly as surveyed.
 
-import { fetchPhotos, fetchReportGroups, photoUrl, reviewReportGroup } from "./api.js";
+import {
+  fetchPhotos,
+  fetchReportGroups,
+  photoUrl,
+  reviewReportGroup,
+  verifyAllReportGroups,
+  verifyReportGroup,
+} from "./api.js";
 
 const queue = document.querySelector("#report-queue");
 const pendingCount = document.querySelector("#pending-count");
 const statusMessage = document.querySelector("#admin-status");
 const refreshButton = document.querySelector("#refresh-queue");
+const verifyAllButton = document.querySelector("#verify-all");
 
 function showStatus(text, kind) {
   statusMessage.textContent = text;
@@ -104,7 +112,8 @@ function renderGroup(group) {
   actions.className = "report-actions";
   actions.append(
     makeButton("Approve", "approve", () => review(group.key, "approve")),
-    makeButton("Reject", "secondary", () => review(group.key, "reject"))
+    makeButton("Reject", "secondary", () => review(group.key, "reject")),
+    makeButton("Check it", "secondary", (event) => check(group.key, event.target))
   );
   body.appendChild(actions);
 
@@ -141,6 +150,107 @@ async function review(key, action) {
   await refreshQueue();
 }
 
+/**
+ * What the Verifier concluded, shown as its working rather than its answer.
+ *
+ * The weight, the bar it had to clear and what closing the place would cost
+ * are all here because an administrator overruling this needs to see which
+ * step they disagree with. A verdict that only said "escalated" would be
+ * asking to be trusted, which is the opposite of the point.
+ */
+function verdictPanel(verdict) {
+  const panel = document.createElement("div");
+  panel.className = `verdict verdict-${verdict.action}`;
+
+  const headline = document.createElement("p");
+  headline.className = "verdict-headline";
+  const badge = document.createElement("span");
+  badge.className = "verdict-badge";
+  badge.textContent = {
+    approved: "Approved",
+    rejected: "Rejected",
+    escalated: "Left for you",
+  }[verdict.action];
+  const why = document.createElement("span");
+  why.textContent = verdict.why;
+  headline.append(badge, why);
+  panel.appendChild(headline);
+
+  const sums = document.createElement("p");
+  sums.className = "verdict-sums";
+  sums.textContent =
+    `Corroboration ${verdict.weight} against a bar of ${verdict.threshold}` +
+    (verdict.raised_because ? ` (raised from ${verdict.base_threshold})` : "") +
+    ` · ${verdict.impact.describes}`;
+  panel.appendChild(sums);
+
+  if (verdict.reading.weights.length > 0) {
+    const list = document.createElement("ul");
+    list.className = "verdict-weights";
+    for (const weight of verdict.reading.weights) {
+      const item = document.createElement("li");
+      const score = document.createElement("strong");
+      score.textContent = weight.weight.toFixed(2);
+      const reason = document.createElement("span");
+      reason.textContent = weight.why;
+      item.append(score, reason);
+      list.appendChild(item);
+    }
+    panel.appendChild(list);
+  }
+
+  return panel;
+}
+
+async function check(key, button) {
+  // A model call takes a second or two, and a button that looks idle while
+  // it waits gets pressed again.
+  const label = button.textContent;
+  button.disabled = true;
+  button.textContent = "Checking…";
+
+  try {
+    const verdict = await verifyReportGroup(key);
+    if (verdict.applied) {
+      // The row has left the queue, so there is nothing left to attach the
+      // reasoning to - it goes in the status line instead.
+      showStatus(`${verdict.action}: ${verdict.why}`, "success");
+      await refreshQueue();
+      return;
+    }
+    button.closest(".report-card").appendChild(verdictPanel(verdict));
+  } catch (error) {
+    showStatus(error.message, "error");
+  } finally {
+    button.disabled = false;
+    button.textContent = label;
+  }
+}
+
+async function checkEverything() {
+  verifyAllButton.disabled = true;
+  const label = verifyAllButton.textContent;
+  verifyAllButton.textContent = "Checking…";
+
+  try {
+    const verdicts = await verifyAllReportGroups();
+    const decided = verdicts.filter((v) => v.applied).length;
+    const left = verdicts.length - decided;
+    showStatus(
+      verdicts.length === 0
+        ? "Nothing waiting to check."
+        : `Checked ${verdicts.length}: settled ${decided}, left ${left} for you.`,
+      "success"
+    );
+  } catch (error) {
+    showStatus(error.message, "error");
+  } finally {
+    verifyAllButton.disabled = false;
+    verifyAllButton.textContent = label;
+  }
+  await refreshQueue();
+}
+
 export async function refreshQueue() {
   try {
     const groups = await fetchReportGroups();
@@ -164,3 +274,4 @@ export async function refreshQueue() {
 }
 
 refreshButton.addEventListener("click", refreshQueue);
+verifyAllButton?.addEventListener("click", checkEverything);

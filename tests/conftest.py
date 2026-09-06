@@ -36,9 +36,27 @@ def stay_on_local_disk(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """
     monkeypatch.delenv("SHORTCUT_S3_BUCKET", raising=False)
 
+    # And away from Bedrock, for the same reason plus a sharper one: a real
+    # model call costs money and needs a network, and a suite that quietly
+    # started doing either would be one nobody can run on a train or in CI.
+    #
+    # Set rather than deleted. `load_dotenv` only fills names the environment
+    # leaves unset, so a name set here survives it - whereas deleting would
+    # let a developer's own `.env` put MOCK_MODE=false straight back. Tests
+    # that need the real path build their own settings and hand them in.
+    monkeypatch.setenv("MOCK_MODE", "true")
+
     import shortcut.api as api  # noqa: PLC0415 - after sys.path is set up
 
     monkeypatch.setattr(api, "DOTENV_PATH", tmp_path / "no-such.env")
+
+    # Settings and the client built from them are cached on app.state, and
+    # `app` is a module-level object that outlives any one test. Clearing both
+    # stops a client built under one test's settings from answering in
+    # another - including a real Bedrock client, if one ever gets built.
+    for cached in ("ai_settings", "ai_llm"):
+        if hasattr(api.app.state, cached):
+            monkeypatch.delattr(api.app.state, cached, raising=False)
 
     # The same problem one layer down. A test can point app.state at its own
     # overrides file, but only after the lifespan has already run and built

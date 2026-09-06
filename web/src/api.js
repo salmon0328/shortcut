@@ -153,6 +153,20 @@ export const rejectImportCandidate = (id) =>
 export const reviewReportGroup = (key, action) =>
   postJson(`/reports/groups/${encodeURIComponent(key)}/${action}`, {});
 
+// --- letting the Verifier work the queue ----------------------------------
+//
+// The agent decides, and applies what it decides through the same endpoints
+// the two buttons above call. So a report it approved is indistinguishable
+// afterwards from one an administrator approved - which is why neither of
+// these returns anything the queue has to treat specially.
+
+/** Have the Verifier judge one problem. May approve, reject, or hand it back. */
+export const verifyReportGroup = (key) =>
+  postJson(`/reports/groups/${encodeURIComponent(key)}/verify`, {});
+
+/** The same for everything waiting. One model call per problem, not per report. */
+export const verifyAllReportGroups = () => postJson("/reports/verify-all", {});
+
 // --- editing the map, and photos of it ------------------------------------
 
 export const addNode = (payload) => postJson("/admin/nodes", payload);
