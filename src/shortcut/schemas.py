@@ -46,6 +46,7 @@ __all__ = [
     "ReportGroupSummary",
     "ReviewResult",
     "PhotoSummary",
+    "PhotoUpdateRequest",
     "NewNodeRequest",
     "NewEdgeRequest",
     "NodeUpdateRequest",
@@ -665,6 +666,31 @@ class ReviewResult(BaseModel):
 # --------------------------------------------------------------------------
 # Photos
 # --------------------------------------------------------------------------
+
+
+class PhotoUpdateRequest(BaseModel):
+    """What may be changed about a photo after it has been uploaded.
+
+    ``facing`` is the field that matters. A bulk upload has no way to know
+    which way a camera pointed - the files are named by number and timestamp -
+    so photos arrive undirected and are labelled afterwards by somebody who
+    recognises the corridor. Without this the only way to correct one was to
+    delete it and upload it again.
+
+    Every field is optional and ``None`` means "leave it alone", which is why
+    clearing a direction needs its own flag rather than sending a null.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    caption: str | None = None
+    location: str | None = None
+    facing: str | None = Field(
+        default=None, description="Node id being looked towards."
+    )
+    clear_facing: bool = Field(
+        default=False, description="Set the photo back to having no direction."
+    )
 
 
 class PhotoSummary(BaseModel):

@@ -1,0 +1,3 @@
+from,to,walk_seconds,covered,stairs,lift,note
+SS_B3_A,SS_Canteen_A,5,true,false,false,"Drawn on page 9 as a 5s line labelled ""To SS-Canteen-A"". Confirmed on site as flat - the B3/B4 labels name the two buildings' own levels, which meet without a step. This is the only link between B3 and the rest of the map."
+SS_B3_E,SS_B3_D,7,true,false,false,"Time ESTIMATED, not walked. The surveyor left this one as ?s. 7s is its drawn length scaled against the two timed links on the same plan, which disagree with each other by 36%, so read it as 6-9s. Replace it with a real measurement when somebody walks it."

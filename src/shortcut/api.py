@@ -74,6 +74,7 @@ from shortcut.schemas import (
     PendingChange,
     PendingChanges,
     PhotoSummary,
+    PhotoUpdateRequest,
     ReportGroupSummary,
     ReportRequest,
     ReportSummary,
@@ -709,6 +710,36 @@ def get_photos_list(
     return [PhotoSummary.from_photo(photo) for photo in found]
 
 
+# An uploaded image never changes. Replacing a floorplan or a photo stores a
+# new one under a new id and leaves the old file alone, so a URL that has
+# answered once will answer the same for ever - which is exactly the condition
+# "immutable" describes, and it is worth saying out loud.
+#
+# It matters more than it looks. These files come from S3 now, and the map
+# panel asks for a floorplan every time a route is drawn: without this the
+# browser re-downloads the better part of a megabyte on each one and the map
+# arrives about three seconds late, looking broken rather than slow. The
+# server-side cache below covers the first request; this covers all the rest.
+IMMUTABLE = "public, max-age=31536000, immutable"
+
+#: Images already fetched from the store, kept by id.
+#:
+#: Unbounded per process, which is safe here for a reason worth stating: an id
+#: is a fresh uuid per upload and is never reused, and both endpoints look the
+#: image up in the store *before* consulting this - so a deleted image still
+#: answers 404 whatever is cached, and the worst a stale entry costs is the
+#: memory until restart. The deletes below drop their entry anyway, because
+#: leaving rubbish behind on purpose invites somebody to rely on it.
+_image_cache: dict[str, bytes] = {}
+
+
+def _cached_bytes(key: str, read) -> bytes:
+    """Read an image once per process, however many routes ask for it."""
+    if key not in _image_cache:
+        _image_cache[key] = read()
+    return _image_cache[key]
+
+
 @app.get(
     "/photos/{photo_id}/file",
     summary="Fetch the image itself",
@@ -722,12 +753,16 @@ def get_photo_file(
             status_code=status.HTTP_404_NOT_FOUND, detail=f"No photo {photo_id!r}."
         )
     try:
-        content = photos.read_file(photo)
+        content = _cached_bytes(f"photo:{photo.id}", lambda: photos.read_file(photo))
     except PhotoStoreError as error:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=str(error)
         ) from error
-    return Response(content=content, media_type=photo.content_type)
+    return Response(
+        content=content,
+        media_type=photo.content_type,
+        headers={"Cache-Control": IMMUTABLE},
+    )
 
 
 @app.post(
@@ -800,12 +835,51 @@ async def post_photo(
     return PhotoSummary.from_photo(photo)
 
 
+@app.patch(
+    "/photos/{photo_id}",
+    response_model=PhotoSummary,
+    summary="Change what is recorded about a photo",
+    responses={404: {"description": "No photo with that id."}},
+)
+def patch_photo(
+    photo_id: str,
+    changes: PhotoUpdateRequest,
+    photos: PhotoStore = Depends(get_photos),
+    graph: CampusGraph = Depends(get_graph),
+) -> PhotoSummary:
+    """Label a photo after the fact - above all, which way it faces.
+
+    The direction is checked against the map here rather than trusted, because
+    a photo facing a place that does not exist is one ``best_of`` will never
+    match and nobody will ever notice is broken.
+    """
+    if changes.facing is not None and changes.facing not in graph.nodes:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Unknown node id {changes.facing!r} to face.",
+        )
+
+    updated = photos.update_details(
+        photo_id,
+        caption=changes.caption,
+        location=changes.location,
+        facing=changes.facing,
+        clear_facing=changes.clear_facing,
+    )
+    if updated is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"No photo {photo_id!r}."
+        )
+    return PhotoSummary.from_photo(updated)
+
+
 @app.delete(
     "/photos/{photo_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete a photo",
 )
 def delete_photo(photo_id: str, photos: PhotoStore = Depends(get_photos)) -> None:
+    _image_cache.pop(f"photo:{photo_id}", None)
     if not photos.delete(photo_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=f"No photo {photo_id!r}."
@@ -1058,10 +1132,30 @@ def get_floorplans(
     floor: str | None = None,
     floorplans: FloorplanStore = Depends(get_floorplans_store),
 ) -> list[FloorplanSummary]:
-    if building and floor:
-        plan = floorplans.for_floor(building, floor)
-        return [FloorplanSummary.from_floorplan(plan)] if plan else []
-    return [FloorplanSummary.from_floorplan(plan) for plan in floorplans.all()]
+    """List the plans, or say plainly that the store cannot be reached.
+
+    An unreachable store is not the same as a floor nobody has surveyed, and
+    the difference is the whole message. Returning an empty list would have
+    the map report "no floorplan for this floor yet" and send somebody off to
+    upload one that is already there; a bare 500 tells them only that
+    something broke. Both hide the usual cause, which is that a set of
+    temporary AWS credentials quietly expired.
+    """
+    try:
+        if building and floor:
+            plan = floorplans.for_floor(building, floor)
+            return [FloorplanSummary.from_floorplan(plan)] if plan else []
+        return [FloorplanSummary.from_floorplan(plan) for plan in floorplans.all()]
+    except Exception as error:  # noqa: BLE001 - any storage failure reads the same
+        logger.warning("floorplan store unreachable: %s", error)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "The floorplan store could not be reached, so the map cannot be "
+                "drawn. Routes and directions are unaffected. If this machine "
+                "uses temporary AWS credentials, they have most likely expired."
+            ),
+        ) from error
 
 
 @app.get(
@@ -1078,12 +1172,22 @@ def get_floorplan_file(
             detail=f"No floorplan {floorplan_id!r}.",
         )
     try:
-        content = floorplans.read_file(plan)
+        content = _cached_bytes(f"plan:{plan.id}", lambda: floorplans.read_file(plan))
     except FloorplanStoreError as error:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=str(error)
         ) from error
-    return Response(content=content, media_type=plan.content_type)
+    except Exception as error:  # noqa: BLE001 - see get_floorplans
+        logger.warning("floorplan image unreachable: %s", error)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="The floorplan image could not be fetched from storage.",
+        ) from error
+    return Response(
+        content=content,
+        media_type=plan.content_type,
+        headers={"Cache-Control": IMMUTABLE},
+    )
 
 
 @app.post(
@@ -1170,6 +1274,7 @@ def patch_floorplan(
 def delete_floorplan(
     floorplan_id: str, floorplans: FloorplanStore = Depends(get_floorplans_store)
 ) -> None:
+    _image_cache.pop(f"plan:{floorplan_id}", None)
     if not floorplans.delete(floorplan_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

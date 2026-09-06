@@ -250,11 +250,22 @@ def test_fetching_a_plan_that_does_not_exist_is_a_404(client: TestClient) -> Non
 # --------------------------------------------------------------------------
 
 
-def test_places_start_without_coordinates(client: TestClient) -> None:
-    """Nothing has been surveyed onto a plan yet, and the API says so."""
+def test_a_place_is_either_on_a_plan_or_off_it_never_half_on(
+    client: TestClient,
+) -> None:
+    """A place has both coordinates or neither.
+
+    Half a position is worse than none: the map would draw the pin against a
+    default for the missing axis and put the place confidently in the wrong
+    part of the building. Floors nobody has traced yet legitimately have no
+    coordinates at all, which is why this asks for agreement rather than for
+    every place to have them.
+    """
     nodes = client.get("/nodes").json()
 
-    assert all(node["x"] is None and node["y"] is None for node in nodes)
+    assert nodes
+    assert all((node["x"] is None) == (node["y"] is None) for node in nodes)
+    assert any(node["x"] is not None for node in nodes)
 
 
 def test_a_place_can_be_given_coordinates(client: TestClient) -> None:
@@ -280,3 +291,105 @@ def test_a_new_place_can_be_added_with_coordinates(client: TestClient) -> None:
 
     added = next(n for n in client.get("/nodes").json() if n["id"] == "Hive_B5_J")
     assert (added["x"], added["y"]) == (4.0, 8.0)
+
+
+# --------------------------------------------------------------------------
+# Serving the image itself
+# --------------------------------------------------------------------------
+
+
+def test_a_floorplan_is_only_read_from_the_store_once(
+    client: TestClient, floorplans: FloorplanStore
+) -> None:
+    """The map asks for a plan every time it draws a route.
+
+    Once these images came from S3 that meant re-downloading the better part
+    of a megabyte per route, and the map arriving seconds late looks broken
+    rather than slow. An uploaded image never changes - replacing one stores a
+    new file under a new id - so reading it more than once is pure waste.
+    """
+    plan = upload(client).json()
+    reads = 0
+    original = floorplans.read_file
+
+    def counted(*args, **kwargs):
+        nonlocal reads
+        reads += 1
+        return original(*args, **kwargs)
+
+    floorplans.read_file = counted  # type: ignore[method-assign]
+
+    for _ in range(3):
+        assert client.get(f"/floorplans/{plan['id']}/file").status_code == 200
+
+    assert reads == 1
+
+
+def test_a_floorplan_image_tells_the_browser_it_will_never_change(
+    client: TestClient,
+) -> None:
+    """So the second route drawn does not fetch the plan again at all."""
+    plan = upload(client).json()
+
+    response = client.get(f"/floorplans/{plan['id']}/file")
+
+    assert "immutable" in response.headers["cache-control"]
+
+
+def test_a_deleted_floorplan_stops_being_served_even_though_it_was_cached(
+    client: TestClient,
+) -> None:
+    """The store is asked first, so the cache cannot outlive the file."""
+    plan = upload(client).json()
+    assert client.get(f"/floorplans/{plan['id']}/file").status_code == 200
+
+    assert client.delete(f"/floorplans/{plan['id']}").status_code == 204
+
+    assert client.get(f"/floorplans/{plan['id']}/file").status_code == 404
+
+
+def test_a_store_that_cannot_be_reached_says_so_rather_than_looking_empty(
+    client: TestClient, floorplans: FloorplanStore
+) -> None:
+    """An unreachable store and an unsurveyed floor are different problems.
+
+    Reported separately because the advice differs: one means wait or fix
+    your credentials, the other means go and upload a plan. Answering an
+    outage with an empty list sends somebody to upload a floorplan that is
+    already there, and answering it with a 500 tells them nothing at all.
+
+    In practice the cause is almost always a set of temporary AWS credentials
+    that expired part-way through an afternoon.
+    """
+
+    def unreachable(*args, **kwargs):
+        raise RuntimeError("The provided token has expired.")
+
+    floorplans.for_floor = unreachable  # type: ignore[method-assign]
+    floorplans.all = unreachable  # type: ignore[method-assign]
+
+    response = client.get("/floorplans?building=Hive&floor=B5")
+
+    assert response.status_code == 503
+    assert "could not be reached" in response.json()["detail"]
+    assert "credentials" in response.json()["detail"]
+
+
+def test_an_unreachable_store_does_not_stop_a_route_being_returned(
+    client: TestClient, floorplans: FloorplanStore
+) -> None:
+    """The map is a nicety; the directions are the answer."""
+
+    def unreachable(*args, **kwargs):
+        raise RuntimeError("The provided token has expired.")
+
+    floorplans.for_floor = unreachable  # type: ignore[method-assign]
+    floorplans.all = unreachable  # type: ignore[method-assign]
+
+    route = client.post(
+        "/route",
+        json={"origin": "Hive_B5_G", "destination": "Hive_B5_C", "preference": "fastest"},
+    )
+
+    assert route.status_code == 200
+    assert route.json()["steps"]

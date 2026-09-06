@@ -5,110 +5,332 @@
       "name": "Lift Lobby",
       "building": "Hive",
       "floor": "B5",
-      "type": "junction"
+      "type": "junction",
+      "x": 21.28,
+      "y": 16.54
     },
     {
       "id": "Hive_B5_B",
       "name": "Main Staircase",
       "building": "Hive",
       "floor": "B5",
-      "type": "stairs"
+      "type": "stairs",
+      "x": 21.83,
+      "y": 13.06
     },
     {
       "id": "Hive_B5_C",
       "name": "Staircase 1",
       "building": "Hive",
       "floor": "B5",
-      "type": "stairs"
+      "type": "stairs",
+      "x": 17.13,
+      "y": 32.92
     },
     {
       "id": "Hive_B5_D",
       "name": "Staircase 2",
       "building": "Hive",
       "floor": "B5",
-      "type": "stairs"
+      "type": "stairs",
+      "x": 36.33,
+      "y": 27.34
     },
     {
       "id": "Hive_B5_E",
       "name": "Staircase 3",
       "building": "Hive",
       "floor": "B5",
-      "type": "stairs"
+      "type": "stairs",
+      "x": 39.47,
+      "y": 13.6
     },
     {
       "id": "Hive_B5_F",
       "name": "Pick Lockers",
       "building": "Hive",
       "floor": "B5",
-      "type": "junction"
+      "type": "junction",
+      "x": 31.56,
+      "y": 11.33
     },
     {
       "id": "Hive_B5_G",
       "name": "Courtyard",
       "building": "Hive",
       "floor": "B5",
-      "type": "junction"
+      "type": "junction",
+      "x": 30.83,
+      "y": 20.73
     },
     {
       "id": "Hive_B5_H",
       "name": "Side Entrance",
       "building": "Hive",
       "floor": "B5",
-      "type": "junction"
+      "type": "junction",
+      "x": 30.29,
+      "y": 27.88
     },
     {
       "id": "Hive_B5_I",
       "name": "Main Entrance",
       "building": "Hive",
       "floor": "B5",
-      "type": "junction"
+      "type": "junction",
+      "x": 42.7,
+      "y": 19.45
     },
     {
       "id": "Hive_B4_A",
       "name": "Lift Lobby",
       "building": "Hive",
       "floor": "B4",
-      "type": "junction"
+      "type": "junction",
+      "x": 22.89,
+      "y": 20.6
     },
     {
       "id": "Hive_B4_B",
       "name": "Main Staircase",
       "building": "Hive",
       "floor": "B4",
-      "type": "stairs"
+      "type": "stairs",
+      "x": 23.59,
+      "y": 16.46
     },
     {
       "id": "Hive_B4_C",
       "name": "Staircase 1",
       "building": "Hive",
       "floor": "B4",
-      "type": "stairs"
+      "type": "stairs",
+      "x": 18.13,
+      "y": 40.83
     },
     {
       "id": "Hive_B4_D",
       "name": "Staircase 2",
       "building": "Hive",
       "floor": "B4",
-      "type": "stairs"
+      "type": "stairs",
+      "x": 41.77,
+      "y": 34.91
     },
     {
       "id": "Hive_B4_E",
       "name": "Staircase 3",
       "building": "Hive",
       "floor": "B4",
-      "type": "stairs"
+      "type": "stairs",
+      "x": 45.23,
+      "y": 17.17
     },
     {
       "id": "Hive_B4_F",
       "name": "Side Entrance 1",
       "building": "Hive",
       "floor": "B4",
-      "type": "junction"
+      "type": "junction",
+      "x": 26.97,
+      "y": 38.6
     },
     {
       "id": "Hive_B4_G",
       "name": "Side Entrance 2",
       "building": "Hive",
+      "floor": "B4",
+      "type": "junction",
+      "x": 33.61,
+      "y": 35.51
+    },
+    {
+      "id": "Hive_A",
+      "name": "Hive A",
+      "building": "Hive",
+      "floor": "B4",
+      "type": "junction",
+      "x": 14.9,
+      "y": 46.63
+    },
+    {
+      "id": "Hive_B",
+      "name": "Hive B",
+      "building": "Hive",
+      "floor": "B4",
+      "type": "junction",
+      "x": 26.79,
+      "y": 43.46
+    },
+    {
+      "id": "Hive_B3_A",
+      "name": "Hive B3 A",
+      "building": "Hive",
+      "floor": "B3",
+      "type": "junction",
+      "x": 38.58,
+      "y": 21.48
+    },
+    {
+      "id": "Hive_B3_B",
+      "name": "Hive B3 B",
+      "building": "Hive",
+      "floor": "B3",
+      "type": "junction",
+      "x": 39.56,
+      "y": 18.51
+    },
+    {
+      "id": "Hive_B3_C",
+      "name": "Hive B3 C",
+      "building": "Hive",
+      "floor": "B3",
+      "type": "junction",
+      "x": 35.16,
+      "y": 36.51
+    },
+    {
+      "id": "Hive_B3_D",
+      "name": "Hive B3 D",
+      "building": "Hive",
+      "floor": "B3",
+      "type": "junction",
+      "x": 52.9,
+      "y": 32.45
+    },
+    {
+      "id": "Hive_B3_E",
+      "name": "Hive B3 E",
+      "building": "Hive",
+      "floor": "B3",
+      "type": "junction",
+      "x": 55.35,
+      "y": 18.85
+    },
+    {
+      "id": "Hive_B3_F",
+      "name": "Hive B3 F",
+      "building": "Hive",
+      "floor": "B3",
+      "type": "junction",
+      "x": 45.34,
+      "y": 18.49
+    },
+    {
+      "id": "Hive_B3_G",
+      "name": "Hive B3 G",
+      "building": "Hive",
+      "floor": "B3",
+      "type": "junction",
+      "x": 40.92,
+      "y": 15.15
+    },
+    {
+      "id": "Hive_C",
+      "name": "Hive C",
+      "building": "Hive",
+      "floor": "B4",
+      "type": "junction",
+      "x": 35.25,
+      "y": 41.29
+    },
+    {
+      "id": "Hive_D",
+      "name": "Hive D",
+      "building": "Hive",
+      "floor": "B4",
+      "type": "junction",
+      "x": 45.07,
+      "y": 40.32
+    },
+    {
+      "id": "Hive_SS_Walkway_A",
+      "name": "Hive SS Walkway A",
+      "building": "Hive-SS",
+      "floor": "B4",
+      "type": "junction"
+    },
+    {
+      "id": "Hive_SS_Walkway_B",
+      "name": "Hive SS Walkway B",
+      "building": "Hive-SS",
+      "floor": "B4",
+      "type": "junction"
+    },
+    {
+      "id": "Hive_SS_Walkway_C",
+      "name": "Hive SS Walkway C",
+      "building": "Hive-SS",
+      "floor": "B4",
+      "type": "junction"
+    },
+    {
+      "id": "Hive_SS_Walkway_D",
+      "name": "Hive SS Walkway D",
+      "building": "Hive-SS",
+      "floor": "B4",
+      "type": "junction"
+    },
+    {
+      "id": "S3_B3_A",
+      "name": "S3 B3 A",
+      "building": "S3",
+      "floor": "B3",
+      "type": "junction"
+    },
+    {
+      "id": "S3_B3_B",
+      "name": "S3 B3 B",
+      "building": "S3",
+      "floor": "B3",
+      "type": "junction"
+    },
+    {
+      "id": "SS_B3_A",
+      "name": "SS B3 A",
+      "building": "SS",
+      "floor": "B3",
+      "type": "junction"
+    },
+    {
+      "id": "SS_B3_B",
+      "name": "SS B3 B",
+      "building": "SS",
+      "floor": "B3",
+      "type": "junction"
+    },
+    {
+      "id": "SS_B3_D",
+      "name": "SS B3 D",
+      "building": "SS",
+      "floor": "B3",
+      "type": "junction"
+    },
+    {
+      "id": "SS_B3_E",
+      "name": "SS B3 E",
+      "building": "SS",
+      "floor": "B3",
+      "type": "junction"
+    },
+    {
+      "id": "SS_B3_F",
+      "name": "SS B3 F",
+      "building": "SS",
+      "floor": "B3",
+      "type": "junction"
+    },
+    {
+      "id": "SS_Canteen_A",
+      "name": "SS Canteen A",
+      "building": "SS",
+      "floor": "B4",
+      "type": "junction"
+    },
+    {
+      "id": "SS_Canteen_B",
+      "name": "SS Canteen B",
+      "building": "SS",
       "floor": "B4",
       "type": "junction"
     }
@@ -412,6 +634,316 @@
       "stairs": true,
       "lift": false,
       "blocked": false
+    },
+    {
+      "id": "Hive_A--Hive_B4_C",
+      "from": "Hive_A",
+      "to": "Hive_B4_C",
+      "distance_m": 14.0,
+      "walk_seconds": 10,
+      "covered": true,
+      "stairs": false,
+      "lift": false,
+      "blocked": false
+    },
+    {
+      "id": "Hive_A--Hive_SS_Walkway_D",
+      "from": "Hive_A",
+      "to": "Hive_SS_Walkway_D",
+      "distance_m": 9.8,
+      "walk_seconds": 7,
+      "covered": false,
+      "stairs": false,
+      "lift": false,
+      "blocked": false
+    },
+    {
+      "id": "Hive_B--Hive_B4_F",
+      "from": "Hive_B",
+      "to": "Hive_B4_F",
+      "distance_m": 7.0,
+      "walk_seconds": 5,
+      "covered": true,
+      "stairs": false,
+      "lift": false,
+      "blocked": false
+    },
+    {
+      "id": "Hive_B--Hive_SS_Walkway_D",
+      "from": "Hive_B",
+      "to": "Hive_SS_Walkway_D",
+      "distance_m": 7.0,
+      "walk_seconds": 5,
+      "covered": false,
+      "stairs": false,
+      "lift": false,
+      "blocked": false
+    },
+    {
+      "id": "Hive_B3_A--Hive_B3_B",
+      "from": "Hive_B3_A",
+      "to": "Hive_B3_B",
+      "distance_m": 4.2,
+      "walk_seconds": 3,
+      "covered": true,
+      "stairs": false,
+      "lift": false,
+      "blocked": false
+    },
+    {
+      "id": "Hive_B3_A--Hive_B3_C",
+      "from": "Hive_B3_A",
+      "to": "Hive_B3_C",
+      "distance_m": 22.4,
+      "walk_seconds": 16,
+      "covered": true,
+      "stairs": false,
+      "lift": false,
+      "blocked": false
+    },
+    {
+      "id": "Hive_B3_A--Hive_B3_F",
+      "from": "Hive_B3_A",
+      "to": "Hive_B3_F",
+      "distance_m": 11.2,
+      "walk_seconds": 8,
+      "covered": true,
+      "stairs": false,
+      "lift": false,
+      "blocked": false
+    },
+    {
+      "id": "Hive_B3_C--Hive_B3_D",
+      "from": "Hive_B3_C",
+      "to": "Hive_B3_D",
+      "distance_m": 18.2,
+      "walk_seconds": 13,
+      "covered": true,
+      "stairs": false,
+      "lift": false,
+      "blocked": false
+    },
+    {
+      "id": "Hive_B3_D--Hive_B3_E",
+      "from": "Hive_B3_D",
+      "to": "Hive_B3_E",
+      "distance_m": 15.4,
+      "walk_seconds": 11,
+      "covered": true,
+      "stairs": false,
+      "lift": false,
+      "blocked": false
+    },
+    {
+      "id": "Hive_B3_E--Hive_B3_F",
+      "from": "Hive_B3_E",
+      "to": "Hive_B3_F",
+      "distance_m": 14.0,
+      "walk_seconds": 10,
+      "covered": true,
+      "stairs": false,
+      "lift": false,
+      "blocked": false
+    },
+    {
+      "id": "Hive_B3_F--Hive_B3_G",
+      "from": "Hive_B3_F",
+      "to": "Hive_B3_G",
+      "distance_m": 8.4,
+      "walk_seconds": 6,
+      "covered": true,
+      "stairs": false,
+      "lift": false,
+      "blocked": false
+    },
+    {
+      "id": "Hive_B3_G--S3_B3_B",
+      "from": "Hive_B3_G",
+      "to": "S3_B3_B",
+      "distance_m": 9.8,
+      "walk_seconds": 7,
+      "covered": true,
+      "stairs": false,
+      "lift": false,
+      "blocked": false
+    },
+    {
+      "id": "Hive_B4_D--Hive_D",
+      "from": "Hive_B4_D",
+      "to": "Hive_D",
+      "distance_m": 14.0,
+      "walk_seconds": 10,
+      "covered": true,
+      "stairs": false,
+      "lift": false,
+      "blocked": false
+    },
+    {
+      "id": "Hive_B4_G--Hive_C",
+      "from": "Hive_B4_G",
+      "to": "Hive_C",
+      "distance_m": 7.0,
+      "walk_seconds": 5,
+      "covered": true,
+      "stairs": false,
+      "lift": false,
+      "blocked": false
+    },
+    {
+      "id": "Hive_C--Hive_D",
+      "from": "Hive_C",
+      "to": "Hive_D",
+      "distance_m": 11.2,
+      "walk_seconds": 8,
+      "covered": true,
+      "stairs": false,
+      "lift": false,
+      "blocked": false
+    },
+    {
+      "id": "Hive_C--Hive_SS_Walkway_D",
+      "from": "Hive_C",
+      "to": "Hive_SS_Walkway_D",
+      "distance_m": 14.0,
+      "walk_seconds": 10,
+      "covered": false,
+      "stairs": false,
+      "lift": false,
+      "blocked": false
+    },
+    {
+      "id": "Hive_SS_Walkway_A--Hive_SS_Walkway_B",
+      "from": "Hive_SS_Walkway_A",
+      "to": "Hive_SS_Walkway_B",
+      "distance_m": 9.8,
+      "walk_seconds": 7,
+      "covered": false,
+      "stairs": false,
+      "lift": false,
+      "blocked": false
+    },
+    {
+      "id": "Hive_SS_Walkway_A--Hive_SS_Walkway_C",
+      "from": "Hive_SS_Walkway_A",
+      "to": "Hive_SS_Walkway_C",
+      "distance_m": 9.8,
+      "walk_seconds": 7,
+      "covered": false,
+      "stairs": false,
+      "lift": false,
+      "blocked": false
+    },
+    {
+      "id": "Hive_SS_Walkway_B--Hive_SS_Walkway_D",
+      "from": "Hive_SS_Walkway_B",
+      "to": "Hive_SS_Walkway_D",
+      "distance_m": 8.4,
+      "walk_seconds": 6,
+      "covered": false,
+      "stairs": false,
+      "lift": false,
+      "blocked": false
+    },
+    {
+      "id": "Hive_SS_Walkway_C--SS_Canteen_B",
+      "from": "Hive_SS_Walkway_C",
+      "to": "SS_Canteen_B",
+      "distance_m": 23.8,
+      "walk_seconds": 17,
+      "covered": false,
+      "stairs": false,
+      "lift": false,
+      "blocked": false
+    },
+    {
+      "id": "S3_B3_A--S3_B3_B",
+      "from": "S3_B3_A",
+      "to": "S3_B3_B",
+      "distance_m": 71.4,
+      "walk_seconds": 51,
+      "covered": true,
+      "stairs": false,
+      "lift": false,
+      "blocked": false
+    },
+    {
+      "id": "S3_B3_A--SS_B3_F",
+      "from": "S3_B3_A",
+      "to": "SS_B3_F",
+      "distance_m": 14.0,
+      "walk_seconds": 10,
+      "covered": true,
+      "stairs": false,
+      "lift": false,
+      "blocked": false
+    },
+    {
+      "id": "SS_B3_A--SS_B3_B",
+      "from": "SS_B3_A",
+      "to": "SS_B3_B",
+      "distance_m": 9.8,
+      "walk_seconds": 7,
+      "covered": true,
+      "stairs": false,
+      "lift": false,
+      "blocked": false
+    },
+    {
+      "id": "SS_B3_B--SS_B3_D",
+      "from": "SS_B3_B",
+      "to": "SS_B3_D",
+      "distance_m": 71.4,
+      "walk_seconds": 51,
+      "covered": true,
+      "stairs": false,
+      "lift": false,
+      "blocked": false
+    },
+    {
+      "id": "SS_B3_D--SS_B3_F",
+      "from": "SS_B3_D",
+      "to": "SS_B3_F",
+      "distance_m": 18.2,
+      "walk_seconds": 13,
+      "covered": true,
+      "stairs": false,
+      "lift": false,
+      "blocked": false
+    },
+    {
+      "id": "SS_Canteen_A--SS_Canteen_B",
+      "from": "SS_Canteen_A",
+      "to": "SS_Canteen_B",
+      "distance_m": 11.2,
+      "walk_seconds": 8,
+      "covered": true,
+      "stairs": false,
+      "lift": false,
+      "blocked": false
+    },
+    {
+      "id": "SS_B3_A--SS_Canteen_A",
+      "from": "SS_B3_A",
+      "to": "SS_Canteen_A",
+      "distance_m": 7.0,
+      "walk_seconds": 5,
+      "covered": true,
+      "stairs": false,
+      "lift": false,
+      "blocked": false,
+      "note": "Drawn on page 9 as a 5s line labelled \"To SS-Canteen-A\". Confirmed on site as flat - the B3/B4 labels name the two buildings' own levels, which meet without a step. This is the only link between B3 and the rest of the map."
+    },
+    {
+      "id": "SS_B3_D--SS_B3_E",
+      "from": "SS_B3_D",
+      "to": "SS_B3_E",
+      "distance_m": 9.8,
+      "walk_seconds": 7,
+      "covered": true,
+      "stairs": false,
+      "lift": false,
+      "blocked": false,
+      "note": "Time ESTIMATED, not walked. The surveyor left this one as ?s. 7s is its drawn length scaled against the two timed links on the same plan, which disagree with each other by 36%, so read it as 6-9s. Replace it with a real measurement when somebody walks it."
     }
   ]
 }

@@ -593,6 +593,8 @@ textarea:focus-visible {
   border-radius: 0.5rem;
 }
 
+/* Widths are in screen pixels, not plan pixels: non-scaling-stroke keeps a
+   6px line 6px wide whatever the floorplan's own resolution happens to be. */
 .map-route-line {
   fill: none;
   stroke: var(--accent);
@@ -600,12 +602,14 @@ textarea:focus-visible {
   stroke-linecap: round;
   stroke-linejoin: round;
   opacity: 0.85;
+  vector-effect: non-scaling-stroke;
 }
 
 .map-pin {
   fill: var(--accent);
   stroke: #fff;
   stroke-width: 2;
+  vector-effect: non-scaling-stroke;
 }
 
 .map-pin.start {

@@ -69,8 +69,14 @@ def test_every_place_on_b4_can_be_reached_from_every_place_on_b5(
 
 
 def test_both_floors_are_actually_in_the_survey(graph: CampusGraph) -> None:
-    assert len(_floor(graph, "B5")) == 9
-    assert len(_floor(graph, "B4")) == 7
+    """Neither floor is a stub.
+
+    Counted loosely on purpose. The survey grows as more of the campus is
+    walked, and an exact count here would fail every time somebody adds a
+    place - which is the one thing this test must not punish.
+    """
+    assert len(_floor(graph, "B5")) >= 9
+    assert len(_floor(graph, "B4")) >= 7
 
 
 # --------------------------------------------------------------------------

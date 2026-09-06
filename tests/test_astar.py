@@ -448,3 +448,56 @@ def test_real_graph_file_is_never_modified(
 
     data = json.loads(graph_path.read_text(encoding="utf-8"))
     assert all(edge.get("blocked", False) is False for edge in data["edges"])
+
+
+# --------------------------------------------------------------------------
+# Coordinates must speed the search up without ever changing its answer
+# --------------------------------------------------------------------------
+
+
+def test_giving_places_coordinates_never_changes_a_single_route(
+    graph_path: Path, tmp_path: Path
+) -> None:
+    """Every trip on the real map, with the coordinates and without them.
+
+    A* only returns the shortest route while its straight-line estimate stays
+    both admissible and consistent, and coordinates are what let it estimate
+    at all. They are also traced per floor, onto separate plans with separate
+    origins, so a distance measured across two of them means nothing - and an
+    estimate built on that is neither.
+
+    This is the check that says so out loud, because the failure is invisible:
+    no error, no warning, just a route a few seconds longer than the one that
+    existed. When it was first written it failed on 76 of the 1560 trips
+    below, and the fix was to leave the estimate out whenever the map spans
+    more than one plan.
+    """
+    surveyed = json.loads(graph_path.read_text(encoding="utf-8"))
+    assert any("x" in node for node in surveyed["nodes"]), "no floor is traced yet"
+
+    flattened = copy.deepcopy(surveyed)
+    for node in flattened["nodes"]:
+        node.pop("x", None)
+        node.pop("y", None)
+    without_path = tmp_path / "no_coordinates.json"
+    without_path.write_text(json.dumps(flattened), encoding="utf-8")
+
+    with_coordinates = load_graph(graph_path)
+    without_coordinates = load_graph(without_path)
+
+    differed: list[str] = []
+    for origin in sorted(with_coordinates.nodes):
+        for destination in sorted(with_coordinates.nodes):
+            if origin == destination:
+                continue
+            here = find_route_or_none(with_coordinates, origin, destination)
+            there = find_route_or_none(without_coordinates, origin, destination)
+            if (here is None) != (there is None):
+                differed.append(f"{origin} -> {destination}: one found a route, one did not")
+            elif here is not None and there is not None and here.node_ids != there.node_ids:
+                differed.append(
+                    f"{origin} -> {destination}: {here.total_seconds}s with "
+                    f"coordinates, {there.total_seconds}s without"
+                )
+
+    assert differed == []

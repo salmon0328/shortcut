@@ -251,13 +251,34 @@ def heuristic_for(
 ) -> Heuristic:
     """Build the best admissible heuristic this graph supports.
 
-    If the destination and the nodes being explored have ``x``/``y``
-    coordinates, the estimate is the straight-line distance divided by the
-    fastest walking speed in the graph. Otherwise the estimate is zero.
+    If the destination and the node being explored are on the same floor and
+    both have ``x``/``y`` coordinates, the estimate is the straight-line
+    distance divided by the fastest walking speed in the graph. Otherwise the
+    estimate is zero.
 
     Zero is always safe (never overestimates), it just means A* explores more
     of the graph than it strictly needs to. The route returned is identical
     either way, so an empty ``x``/``y`` in the JSON costs accuracy nowhere.
+
+    **One floor only, and that is not a detail.** Every floor is traced onto
+    its own plan with its own origin, because the plans are separate images
+    that nothing aligns to each other. A distance measured between two of them
+    is not a distance: it is the gap between two corners of two different
+    pictures, and it comes out however it comes out.
+
+    That rules out more than the cross-floor pairs. Estimating within the goal
+    floor and returning zero elsewhere is *admissible* - it never overshoots -
+    and still wrong here, because it is not **consistent**: stepping off the
+    goal floor drops the estimate by far more than the step costs. A search
+    that settles each node once and never looks at it again needs consistency,
+    not just admissibility, and this one does exactly that. Measured on the
+    real graph, the inconsistent version returned a worse route for 33 of 1560
+    trips - all of them arriving from another floor.
+
+    So a graph spanning more than one plan gets no estimate at all. What is
+    lost is search effort on a graph of a few dozen places, which is nothing;
+    what is kept is the guarantee that the route handed to somebody standing
+    in a corridor is the shortest one.
     """
     if cost is not edge_seconds:
         # The straight-line estimate is expressed in seconds. Mixing it with a
@@ -267,6 +288,14 @@ def heuristic_for(
 
     goal = graph.nodes[destination]
     if goal.x is None or goal.y is None:
+        return zero_heuristic
+
+    goal_plan = (goal.building, goal.floor)
+    if any(
+        (node.building, node.floor) != goal_plan
+        for node in graph.nodes.values()
+        if node.x is not None and node.y is not None
+    ):
         return zero_heuristic
 
     speed = _fastest_speed_m_per_s(graph)
