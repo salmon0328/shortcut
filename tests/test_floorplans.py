@@ -346,3 +346,50 @@ def test_a_deleted_floorplan_stops_being_served_even_though_it_was_cached(
     assert client.delete(f"/floorplans/{plan['id']}").status_code == 204
 
     assert client.get(f"/floorplans/{plan['id']}/file").status_code == 404
+
+
+def test_a_store_that_cannot_be_reached_says_so_rather_than_looking_empty(
+    client: TestClient, floorplans: FloorplanStore
+) -> None:
+    """An unreachable store and an unsurveyed floor are different problems.
+
+    Reported separately because the advice differs: one means wait or fix
+    your credentials, the other means go and upload a plan. Answering an
+    outage with an empty list sends somebody to upload a floorplan that is
+    already there, and answering it with a 500 tells them nothing at all.
+
+    In practice the cause is almost always a set of temporary AWS credentials
+    that expired part-way through an afternoon.
+    """
+
+    def unreachable(*args, **kwargs):
+        raise RuntimeError("The provided token has expired.")
+
+    floorplans.for_floor = unreachable  # type: ignore[method-assign]
+    floorplans.all = unreachable  # type: ignore[method-assign]
+
+    response = client.get("/floorplans?building=Hive&floor=B5")
+
+    assert response.status_code == 503
+    assert "could not be reached" in response.json()["detail"]
+    assert "credentials" in response.json()["detail"]
+
+
+def test_an_unreachable_store_does_not_stop_a_route_being_returned(
+    client: TestClient, floorplans: FloorplanStore
+) -> None:
+    """The map is a nicety; the directions are the answer."""
+
+    def unreachable(*args, **kwargs):
+        raise RuntimeError("The provided token has expired.")
+
+    floorplans.for_floor = unreachable  # type: ignore[method-assign]
+    floorplans.all = unreachable  # type: ignore[method-assign]
+
+    route = client.post(
+        "/route",
+        json={"origin": "Hive_B5_G", "destination": "Hive_B5_C", "preference": "fastest"},
+    )
+
+    assert route.status_code == 200
+    assert route.json()["steps"]

@@ -60,6 +60,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--write", action="store_true")
     parser.add_argument(
+        "--replace",
+        action="store_true",
+        help="upload again even for a floor that already has a calibrated plan",
+    )
+    parser.add_argument(
         "--plans-dir",
         type=Path,
         default=None,
@@ -123,11 +128,18 @@ def main() -> int:
         # pin in the right pattern and the wrong place.
         metres_per_pixel = scale * (plan.width / width)
 
-        state = "already uploaded" if (building, floor) in already else "new"
+        # A floor that already has a plan is left alone unless asked. The
+        # store keeps every upload and serves the newest, so running this
+        # twice without the check quietly doubles the plans rather than
+        # replacing them - which still draws, and is why it went unnoticed.
+        if (building, floor) in already and not arguments.replace:
+            print(f"  {building} {floor}: already has a calibrated plan, left alone")
+            continue
+
         print(
             f"  {building} {floor}: {len(content) / 1e6:.2f} MB from {source}, "
             f"{width}px wide, {metres_per_pixel:.6f} m/pixel "
-            f"({width * metres_per_pixel:.0f} m across) [{state}]"
+            f"({width * metres_per_pixel:.0f} m across)"
         )
 
         if not arguments.write:

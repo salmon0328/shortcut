@@ -1132,10 +1132,30 @@ def get_floorplans(
     floor: str | None = None,
     floorplans: FloorplanStore = Depends(get_floorplans_store),
 ) -> list[FloorplanSummary]:
-    if building and floor:
-        plan = floorplans.for_floor(building, floor)
-        return [FloorplanSummary.from_floorplan(plan)] if plan else []
-    return [FloorplanSummary.from_floorplan(plan) for plan in floorplans.all()]
+    """List the plans, or say plainly that the store cannot be reached.
+
+    An unreachable store is not the same as a floor nobody has surveyed, and
+    the difference is the whole message. Returning an empty list would have
+    the map report "no floorplan for this floor yet" and send somebody off to
+    upload one that is already there; a bare 500 tells them only that
+    something broke. Both hide the usual cause, which is that a set of
+    temporary AWS credentials quietly expired.
+    """
+    try:
+        if building and floor:
+            plan = floorplans.for_floor(building, floor)
+            return [FloorplanSummary.from_floorplan(plan)] if plan else []
+        return [FloorplanSummary.from_floorplan(plan) for plan in floorplans.all()]
+    except Exception as error:  # noqa: BLE001 - any storage failure reads the same
+        logger.warning("floorplan store unreachable: %s", error)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "The floorplan store could not be reached, so the map cannot be "
+                "drawn. Routes and directions are unaffected. If this machine "
+                "uses temporary AWS credentials, they have most likely expired."
+            ),
+        ) from error
 
 
 @app.get(
@@ -1156,6 +1176,12 @@ def get_floorplan_file(
     except FloorplanStoreError as error:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=str(error)
+        ) from error
+    except Exception as error:  # noqa: BLE001 - see get_floorplans
+        logger.warning("floorplan image unreachable: %s", error)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="The floorplan image could not be fetched from storage.",
         ) from error
     return Response(
         content=content,
