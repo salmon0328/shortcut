@@ -6,8 +6,10 @@ The map, as walked. Someone stood at every junction, paced the distance to the
 next one and wrote down what they saw. Everything else in this project reads
 from this file, and nothing writes to it while the server is running.
 
-**17 nodes, 27 edges.** The Hive, floors B5 (9 places) and B4 (8 places),
-joined by four staircases and one lift.
+**40 nodes, 60 edges.** Three basement levels — B5 (9 places), B4 (17) and
+B3 (14) — across four connected structures: the Hive (27 places), the South
+Spine (7), S3 (2) and the walkway joining them (4). They are held together by
+9 staircase links and 2 lifts.
 
 A node is a spot you can stand: a junction, a doorway, a lift lobby, the foot
 of a staircase. An edge is a way between two of them, carrying how long it
@@ -41,7 +43,7 @@ after, so graduating can correct the record but never silently change a route.
 
 ## Not yet verified on site
 
-- **`Hive_B5_015`, the lift between B5 and B4.** `walk_seconds: 15` and
+- **`Hive_Lift_A`, the lift between B5 and B4.** `walk_seconds: 15` and
   `wait_seconds: 20` are the off-peak figures. The wait at peak reaches about
   three minutes; that variance is modelled by crowd reports at routing time
   (see `src/shortcut/crowding.py`) rather than baked into the survey, because
@@ -54,10 +56,16 @@ Everything else here was measured on the walk.
 | Path | What it is | In git? |
 |---|---|---|
 | `campus_graph.json` | the survey, above | yes |
+| `survey_places.csv`, `survey_links.csv` | the walk, as it was written down | yes |
+| `survey_review.md` | what the last import changed, and what it refused to | yes |
+| `survey_sources/` | the drawn node map the survey was read from | yes |
 | `graph_overrides.json` | this machine's live changes | no |
 | `reports.json` | problems students have reported here | no |
-| `photos/` | junction photos and their index | no |
+| `import_candidates.json` | readings from a PDF, waiting for review | no |
+| `import_sources/` | the uploaded PDFs those readings came from | no |
+| `photos/` | photos of places and of reported problems | no |
 | `floorplans/` | floor plan images and their calibration | no |
 
-The gitignored four are runtime state: a fresh clone starts with an empty
-report queue and the surveyed map, which is the correct place to start from.
+The gitignored six are runtime state: a fresh clone starts with an empty
+report queue, an empty review queue and the surveyed map, which is the correct
+place to start from.

@@ -1,7 +1,11 @@
 pytest
 fastapi
+# Imported directly by src/shortcut/schemas.py and the AI layer, so it is
+# named here rather than left to arrive underneath FastAPI: a dependency the
+# code imports by name is one this file should state.
+pydantic
 uvicorn
-httpx
-python-multipart
+httpx             # what fastapi's TestClient runs on
+python-multipart  # file uploads: photos, floorplans, imported PDFs
 boto3
 pymupdf==1.28.2

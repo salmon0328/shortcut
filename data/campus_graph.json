@@ -1012,20 +1012,6 @@
       "one_way": false
     },
     {
-      "id": "Hive_B5_B--Hive_B5_A",
-      "from": "Hive_B5_B",
-      "to": "Hive_B5_A",
-      "distance_m": 4.2,
-      "walk_seconds": 3.0,
-      "covered": true,
-      "stairs": false,
-      "lift": false,
-      "shuttle": false,
-      "wait_seconds": 0.0,
-      "blocked": false,
-      "one_way": false
-    },
-    {
       "id": "SS_B3_E--SS_B3_D",
       "from": "SS_B3_E",
       "to": "SS_B3_D",

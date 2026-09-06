@@ -9,7 +9,7 @@ person. Written for whoever picks this up next.
 
 The survey used to be typed by hand and covered 16 places on two floors of the
 Hive. It is now **read out of `Hive node map.pdf`** and covers **40 places and
-55 links across three buildings**. Every place on a Hive floor has a position,
+60 links across four connected structures**. Every place on a Hive floor has a position,
 so **the map draws for the first time**. **125 photographs** and **3 calibrated
 floorplans** are uploaded. Bedrock works and Claude has been called for real.
 
@@ -32,8 +32,11 @@ each part of the survey is separately addressable:
 
 ### How it works
 
-`scripts/nodemap.py` reads the drawing. `scripts/import_survey.py` turns it
-into `data/campus_graph.json`.
+`src/shortcut/nodemap.py` reads the drawing. `scripts/import_survey.py` turns
+it into `data/campus_graph.json`. Reading the drawing moved into the package
+when the admin screen learned to accept an uploaded PDF: the same reader now
+serves the command line and the server, so both agree about what a drawing
+says.
 
 ```bash
 .venv/bin/python scripts/import_survey.py           # say what would change
