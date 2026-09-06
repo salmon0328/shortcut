@@ -146,193 +146,219 @@
     },
     {
       "id": "Hive_A",
-      "name": "Hive A",
+      "name": "Back Entrance",
       "building": "Hive",
-      "floor": "B4",
+      "floor": "",
       "type": "junction",
-      "x": 14.9,
-      "y": 46.63
+      "x": 0.24268020929372852,
+      "y": 0.9248101639608569
     },
     {
       "id": "Hive_B",
-      "name": "Hive B",
+      "name": "Side Entrance 1",
       "building": "Hive",
-      "floor": "B4",
+      "floor": "",
       "type": "junction",
-      "x": 26.79,
-      "y": 43.46
+      "x": 0.43629741060743005,
+      "y": 0.8619175017174181
     },
     {
       "id": "Hive_B3_A",
-      "name": "Hive B3 A",
+      "name": "Lift Lobby",
       "building": "Hive",
       "floor": "B3",
-      "type": "junction",
-      "x": 38.58,
-      "y": 21.48
+      "type": "lift",
+      "x": 0.566482543621536,
+      "y": 0.49967502640189165
     },
     {
       "id": "Hive_B3_B",
-      "name": "Hive B3 B",
+      "name": "Main Staircase",
       "building": "Hive",
       "floor": "B3",
-      "type": "junction",
-      "x": 39.56,
-      "y": 18.51
+      "type": "stairs",
+      "x": 0.5808249708604407,
+      "y": 0.4306606135411396
     },
     {
       "id": "Hive_B3_C",
-      "name": "Hive B3 C",
+      "name": "Staircase 1",
       "building": "Hive",
       "floor": "B3",
-      "type": "junction",
-      "x": 35.16,
-      "y": 36.51
+      "type": "stairs",
+      "x": 0.5162655121355278,
+      "y": 0.8495856079607361
     },
     {
       "id": "Hive_B3_D",
-      "name": "Hive B3 D",
+      "name": "Staircase 2",
       "building": "Hive",
       "floor": "B3",
-      "type": "junction",
-      "x": 52.9,
-      "y": 32.45
+      "type": "stairs",
+      "x": 0.7767219940929844,
+      "y": 0.7549890931842719
     },
     {
       "id": "Hive_B3_E",
-      "name": "Hive B3 E",
+      "name": "Staircase 3",
       "building": "Hive",
       "floor": "B3",
-      "type": "junction",
-      "x": 55.35,
-      "y": 18.85
+      "type": "stairs",
+      "x": 0.8127058640654703,
+      "y": 0.4385726502863663
     },
     {
       "id": "Hive_B3_F",
-      "name": "Hive B3 F",
+      "name": "Toilet",
       "building": "Hive",
       "floor": "B3",
       "type": "junction",
-      "x": 45.34,
-      "y": 18.49
+      "x": 0.6656257426146654,
+      "y": 0.4300942999663083
     },
     {
       "id": "Hive_B3_G",
-      "name": "Hive B3 G",
+      "name": "Conencting Bridge",
       "building": "Hive",
       "floor": "B3",
       "type": "junction",
-      "x": 40.92,
-      "y": 15.15
+      "x": 0.6007880790443216,
+      "y": 0.352435428438174
     },
     {
       "id": "Hive_C",
-      "name": "Hive C",
+      "name": "Side Entrance 2",
       "building": "Hive",
-      "floor": "B4",
+      "floor": "",
       "type": "junction",
-      "x": 35.25,
-      "y": 41.29
+      "x": 0.5739972316339016,
+      "y": 0.8188348413315949
     },
     {
       "id": "Hive_D",
-      "name": "Hive D",
+      "name": "Side Entrance 3",
       "building": "Hive",
-      "floor": "B4",
+      "floor": "",
       "type": "junction",
-      "x": 45.07,
-      "y": 40.32
+      "x": 0.7339813836237288,
+      "y": 0.7996339314504822
     },
     {
       "id": "Hive_SS_Walkway_A",
-      "name": "Hive SS Walkway A",
+      "name": "Zebra Crossing (SS Side)",
       "building": "Hive-SS",
-      "floor": "B4",
-      "type": "junction"
+      "floor": "",
+      "type": "junction",
+      "x": 0.7038504464285714,
+      "y": 0.2734104477878892
     },
     {
       "id": "Hive_SS_Walkway_B",
-      "name": "Hive SS Walkway B",
+      "name": "Hive SS Walkway",
       "building": "Hive-SS",
-      "floor": "B4",
-      "type": "junction"
+      "floor": "",
+      "type": "junction",
+      "x": 0.7928394236196634,
+      "y": 0.14877738533439216
     },
     {
       "id": "Hive_SS_Walkway_C",
-      "name": "Hive SS Walkway C",
+      "name": "SS Canteen Entrance",
       "building": "Hive-SS",
-      "floor": "B4",
-      "type": "junction"
+      "floor": "",
+      "type": "junction",
+      "x": 0.6798968435704023,
+      "y": 0.41557507637219554
     },
     {
       "id": "Hive_SS_Walkway_D",
-      "name": "Hive SS Walkway D",
+      "name": "Zebra Crossing (Hive Side)",
       "building": "Hive-SS",
-      "floor": "B4",
-      "type": "junction"
+      "floor": "",
+      "type": "junction",
+      "x": 0.7720001571479885,
+      "y": 0.05647126920930632
     },
     {
       "id": "S3_B3_A",
-      "name": "S3 B3 A",
+      "name": "Side Path Entrance",
       "building": "S3",
       "floor": "B3",
-      "type": "junction"
+      "type": "junction",
+      "x": 0.5553857540675802,
+      "y": 0.2538202103323716
     },
     {
       "id": "S3_B3_B",
-      "name": "S3 B3 B",
+      "name": "Connecting Bridge",
       "building": "S3",
       "floor": "B3",
-      "type": "junction"
+      "type": "junction",
+      "x": 0.562153539644475,
+      "y": 0.16886774176538794
     },
     {
       "id": "SS_B3_A",
-      "name": "SS B3 A",
+      "name": "SS Canteen Staircase 1",
       "building": "SS",
       "floor": "B3",
-      "type": "junction"
+      "type": "stairs",
+      "x": 0.6921843400816863,
+      "y": 0.44667308889587265
     },
     {
       "id": "SS_B3_B",
-      "name": "SS B3 B",
+      "name": "SS Concourse",
       "building": "SS",
       "floor": "B3",
-      "type": "junction"
+      "type": "junction",
+      "x": 0.5543622766948002,
+      "y": 0.47438200412826315
     },
     {
       "id": "SS_B3_D",
-      "name": "SS B3 D",
+      "name": "SS Cheers",
       "building": "SS",
       "floor": "B3",
-      "type": "junction"
+      "type": "junction",
+      "x": 0.3682476372754374,
+      "y": 0.6065934970619611
     },
     {
       "id": "SS_B3_E",
-      "name": "SS B3 E",
+      "name": "SS Main Staircase",
       "building": "SS",
       "floor": "B3",
-      "type": "junction"
+      "type": "junction",
+      "x": 0.342924549612897,
+      "y": 0.7501623766114075
     },
     {
       "id": "SS_B3_F",
-      "name": "SS B3 F",
+      "name": "SS Lift Lobby 1",
       "building": "SS",
       "floor": "B3",
-      "type": "junction"
+      "type": "junction",
+      "x": 0.04161288405500066,
+      "y": 0.9088386444760508
     },
     {
       "id": "SS_Canteen_A",
-      "name": "SS Canteen A",
+      "name": "SS Canteen Staircase 1",
       "building": "SS",
-      "floor": "B4",
-      "type": "junction"
+      "floor": "",
+      "type": "stairs",
+      "x": 0.5519086264624384,
+      "y": 0.5658554803757441
     },
     {
       "id": "SS_Canteen_B",
-      "name": "SS Canteen B",
+      "name": "SS Canteen Staircase 3",
       "building": "SS",
-      "floor": "B4",
-      "type": "junction"
+      "floor": "",
+      "type": "junction",
+      "x": 0.661507201547106,
+      "y": 0.7407526148981227
     }
   ],
   "edges": [
@@ -790,12 +816,23 @@
       "blocked": false
     },
     {
+      "id": "Hive_B5_A--Hive_B5_F",
+      "from": "Hive_B5_A",
+      "to": "Hive_B5_F",
+      "distance_m": 16.8,
+      "walk_seconds": 12,
+      "covered": true,
+      "stairs": false,
+      "lift": false,
+      "blocked": false
+    },
+    {
       "id": "Hive_C--Hive_D",
       "from": "Hive_C",
       "to": "Hive_D",
       "distance_m": 11.2,
       "walk_seconds": 8,
-      "covered": true,
+      "covered": false,
       "stairs": false,
       "lift": false,
       "blocked": false
@@ -817,29 +854,7 @@
       "to": "Hive_SS_Walkway_B",
       "distance_m": 9.8,
       "walk_seconds": 7,
-      "covered": false,
-      "stairs": false,
-      "lift": false,
-      "blocked": false
-    },
-    {
-      "id": "Hive_SS_Walkway_A--Hive_SS_Walkway_C",
-      "from": "Hive_SS_Walkway_A",
-      "to": "Hive_SS_Walkway_C",
-      "distance_m": 9.8,
-      "walk_seconds": 7,
-      "covered": false,
-      "stairs": false,
-      "lift": false,
-      "blocked": false
-    },
-    {
-      "id": "Hive_SS_Walkway_B--Hive_SS_Walkway_D",
-      "from": "Hive_SS_Walkway_B",
-      "to": "Hive_SS_Walkway_D",
-      "distance_m": 8.4,
-      "walk_seconds": 6,
-      "covered": false,
+      "covered": true,
       "stairs": false,
       "lift": false,
       "blocked": false
@@ -850,7 +865,7 @@
       "to": "SS_Canteen_B",
       "distance_m": 23.8,
       "walk_seconds": 17,
-      "covered": false,
+      "covered": true,
       "stairs": false,
       "lift": false,
       "blocked": false
@@ -920,30 +935,6 @@
       "stairs": false,
       "lift": false,
       "blocked": false
-    },
-    {
-      "id": "SS_B3_A--SS_Canteen_A",
-      "from": "SS_B3_A",
-      "to": "SS_Canteen_A",
-      "distance_m": 7.0,
-      "walk_seconds": 5,
-      "covered": true,
-      "stairs": false,
-      "lift": false,
-      "blocked": false,
-      "note": "Drawn on page 9 as a 5s line labelled \"To SS-Canteen-A\". Confirmed on site as flat - the B3/B4 labels name the two buildings' own levels, which meet without a step. This is the only link between B3 and the rest of the map."
-    },
-    {
-      "id": "SS_B3_D--SS_B3_E",
-      "from": "SS_B3_D",
-      "to": "SS_B3_E",
-      "distance_m": 9.8,
-      "walk_seconds": 7,
-      "covered": true,
-      "stairs": false,
-      "lift": false,
-      "blocked": false,
-      "note": "Time ESTIMATED, not walked. The surveyor left this one as ?s. 7s is its drawn length scaled against the two timed links on the same plan, which disagree with each other by 36%, so read it as 6-9s. Replace it with a real measurement when somebody walks it."
     }
   ]
 }

@@ -332,6 +332,7 @@
           <button type="button" class="tab" data-tab="add-place">Add place</button>
           <button type="button" class="tab" data-tab="add-link">Add link</button>
           <button type="button" class="tab" data-tab="edit">Edit</button>
+          <button type="button" class="tab" data-tab="import">Import</button>
           <button type="button" class="tab" data-tab="pending">Pending</button>
         </div>
 
@@ -590,6 +591,63 @@
         </div>
 
         <!-- ----------------------- pending ------------------------ -->
+        <!-- ------------------------ import ------------------------ -->
+        <div id="admin-tab-import" hidden>
+          <div class="card">
+            <h3>Read a drawing</h3>
+            <p class="hint">
+              Upload the node-map PDFs. Whatever the map does not already have
+              is read out and listed below for you to check — nothing goes on
+              the map until you approve it, so an unapproved place routes
+              nobody and shows up in no search.
+            </p>
+            <div class="field">
+              <label for="import-files">Node-map PDFs</label>
+              <input type="file" id="import-files" accept="application/pdf" multiple />
+            </div>
+            <button type="button" id="import-button" class="primary">
+              Read drawings
+            </button>
+          </div>
+
+          <p id="import-status" class="status" hidden></p>
+
+          <div class="card" id="import-unsettled-card" hidden>
+            <h3>
+              Lines the drawing did not settle
+              <span id="import-unsettled-count" class="count-pill">0</span>
+            </h3>
+            <p class="hint">
+              Read but not offered: an end touching no place, or a time the
+              surveyor left as <code>?s</code>. Guessing at these is how a map
+              grows a staircase nobody walked, so they are only reported.
+            </p>
+            <ul id="import-unsettled" class="unsettled-list"></ul>
+          </div>
+
+          <div class="card">
+            <h3>
+              Waiting for you
+              <span id="import-count" class="count-pill">0</span>
+            </h3>
+            <p class="hint">
+              Correct anything that is wrong, then approve it. Approving puts
+              it straight onto the live map (and into
+              <strong>Pending</strong>, awaiting the same manual graduation as
+              anything added by hand). Rejecting deletes it — it was never
+              live, so there is nothing to undo.
+            </p>
+            <button type="button" id="approve-all" class="secondary small">
+              Approve everything
+            </button>
+            <button type="button" id="refresh-import" class="secondary small">
+              Refresh
+            </button>
+          </div>
+
+          <div id="import-list"></div>
+        </div>
+
         <div id="admin-tab-pending" hidden>
           <div class="card">
             <h3>

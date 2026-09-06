@@ -38,6 +38,7 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
+from shortcut.candidate_store import Candidate, CandidateStore
 from shortcut.crowding import crowd_waits, with_crowding
 from shortcut.dotenv import load_dotenv
 from shortcut.graph_store import CampusGraph, Edge, UnknownNodeError, load_graph
@@ -55,18 +56,25 @@ from shortcut.overrides import (
     set_override,
 )
 from shortcut.floorplan_store import FloorplanStore, FloorplanStoreError
+from shortcut.nodemap import read_uploaded_pdf
 from shortcut.photo_store import PhotoStore, PhotoStoreError
+from shortcut.survey_import import read_candidates
 from shortcut.report_store import (
     ROUTE_BLOCKING_CONDITIONS,
     ReportStatus,
     ReportStore,
 )
 from shortcut.schemas import (
+    BulkApprovalResult,
+    CandidateReviewResult,
+    CandidateUpdateRequest,
     EdgeSummary,
     FloorplanCalibration,
     FloorplanSummary,
     EdgeUpdateRequest,
     GraphChangeResult,
+    ImportCandidate,
+    ImportSummary,
     NewEdgeRequest,
     NewNodeRequest,
     NodeSummary,
@@ -80,6 +88,7 @@ from shortcut.schemas import (
     ReportSummary,
     ReviewResult,
     RouteChoices,
+    SkippedCandidate,
     RouteOption,
     RouteRequest,
     RouteResponse,
@@ -125,6 +134,7 @@ CAMPUS_GRAPH_PATH = PROJECT_ROOT / "data" / "campus_graph.json"
 # on demand and are not committed: they are this machine's reports, not map data.
 REPORTS_PATH = PROJECT_ROOT / "data" / "reports.json"
 GRAPH_OVERRIDES_PATH = PROJECT_ROOT / "data" / "graph_overrides.json"
+IMPORT_CANDIDATES_PATH = PROJECT_ROOT / "data" / "import_candidates.json"
 PHOTOS_DIR = PROJECT_ROOT / "data" / "photos"
 FLOORPLANS_DIR = PROJECT_ROOT / "data" / "floorplans"
 
@@ -179,6 +189,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     app.state.reports = ReportStore(REPORTS_PATH)
     app.state.photos = PhotoStore(PHOTOS_DIR)
+    app.state.candidates = CandidateStore(IMPORT_CANDIDATES_PATH)
     app.state.floorplans = FloorplanStore(FLOORPLANS_DIR)
     app.state.overrides_path = GRAPH_OVERRIDES_PATH
     app.state.graph = _load_graph_with_overrides(GRAPH_OVERRIDES_PATH)
@@ -254,6 +265,17 @@ def get_photos(request: Request) -> PhotoStore:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="The photo store is not ready yet. Try again shortly.",
+        )
+    return store
+
+
+def get_candidates(request: Request) -> CandidateStore:
+    """Hand the queue of unreviewed candidates to an endpoint."""
+    store: CandidateStore | None = getattr(request.app.state, "candidates", None)
+    if store is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="The import queue is not ready yet. Try again shortly.",
         )
     return store
 
@@ -1531,6 +1553,373 @@ def get_pending_changes(
         total=len(changes),
         graduating=sum(1 for c in changes if c.graduating_fields),
         live_only=sum(1 for c in changes if not c.graduating_fields),
+    )
+
+
+# --------------------------------------------------------------------------
+# Reading a drawing into changes somebody reviews
+# --------------------------------------------------------------------------
+#
+# The lifecycle, and why it has the shape it does:
+#
+#   upload   -> candidates, inert. They route nobody and appear in no search,
+#               because nothing has checked that the drawing was read right.
+#   approve  -> the candidate moves into the overrides file, exactly as if
+#               somebody had typed it into the "Add a place" form. It is live
+#               from that moment: routable, searchable, and listed by
+#               /admin/pending with everything else awaiting graduation.
+#   reject   -> deleted. It was never live, so there is nothing to undo.
+#   graduate -> unchanged: scripts/graduate_overrides.py, read as a git diff.
+#
+# So this adds one step in front of the existing machinery rather than a
+# second way into the map.
+
+
+def _candidate_label(graph: CampusGraph, candidate: Candidate) -> str:
+    """How to name a candidate in a list."""
+    if candidate.kind == "node":
+        fields = candidate.fields
+        where = " · ".join(part for part in (fields.get("building"), fields.get("floor")) if part)
+        return f"{fields.get('name', candidate.target_id)}{f' ({where})' if where else ''}"
+
+    def name_of(node_id: str) -> str:
+        node = graph.nodes.get(node_id)
+        return node.name if node else node_id
+
+    return f"{name_of(candidate.fields['from'])} → {name_of(candidate.fields['to'])}"
+
+
+def _blockers(graph: CampusGraph, candidate: Candidate, waiting: list[Candidate]) -> list[str]:
+    """Which candidates have to be approved before this one can be.
+
+    A link needs the places at both its ends to exist. Reported rather than
+    silently reordered, so the screen can grey out the button and say why.
+    """
+    if candidate.kind != "edge":
+        return []
+    by_target = {other.target_id: other.id for other in waiting if other.kind == "node"}
+    return [
+        by_target[end]
+        for end in (candidate.fields["from"], candidate.fields["to"])
+        if end not in graph.nodes and end in by_target
+    ]
+
+
+def _as_import_candidate(
+    graph: CampusGraph, candidate: Candidate, waiting: list[Candidate]
+) -> ImportCandidate:
+    return ImportCandidate(
+        id=candidate.id,
+        kind=candidate.kind,
+        target_id=candidate.target_id,
+        label=_candidate_label(graph, candidate),
+        fields=candidate.fields,
+        source=candidate.source,
+        marks=list(candidate.marks),
+        disagrees_with_survey=candidate.disagrees_with_survey,
+        name_is_a_stand_in=candidate.name_is_a_stand_in,
+        blocked_by=_blockers(graph, candidate, waiting),
+    )
+
+
+@app.post(
+    "/admin/import",
+    response_model=ImportSummary,
+    status_code=status.HTTP_201_CREATED,
+    summary="Read one or more drawings into changes to review",
+    responses={422: {"description": "A file could not be read as a drawing."}},
+)
+async def post_admin_import(
+    files: list[UploadFile] = File(..., description="Node-map PDFs to read."),
+    graph: CampusGraph = Depends(get_graph),
+    candidates: CandidateStore = Depends(get_candidates),
+) -> ImportSummary:
+    """Read what the drawings say, and queue whatever the map does not have.
+
+    Nothing is added to the map here. Every file is read, and what it found
+    waits for a person - including the lines it could not settle, which are
+    reported in the reviewer's own words rather than guessed at.
+    """
+    filenames: list[str] = []
+    queued: list[dict] = []
+    unsettled: list[str] = []
+    already_known = 0
+    found = 0
+
+    for upload in files:
+        content = await upload.read()
+        name = upload.filename or "a drawing"
+        try:
+            extractions = read_uploaded_pdf(content)
+        except Exception as error:  # noqa: BLE001 - any unreadable file, reported
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"{name} could not be read as a drawing: {error}",
+            ) from error
+
+        reading = read_candidates(graph, extractions, filename=name)
+        filenames.append(name)
+        unsettled.extend(reading.unsettled)
+        already_known += reading.already_known_nodes + reading.already_known_edges
+        found += len(reading.nodes) + len(reading.edges)
+
+        for node in reading.nodes:
+            queued.append(
+                {
+                    "kind": "node",
+                    "target_id": node.node_id,
+                    "fields": node.as_fields(),
+                    "source": node.source,
+                    "name_is_a_stand_in": node.name_is_a_stand_in,
+                }
+            )
+        for edge in reading.edges:
+            queued.append(
+                {
+                    "kind": "edge",
+                    "target_id": edge.edge_id,
+                    "fields": edge.as_fields(),
+                    "source": edge.source,
+                    "marks": edge.marks,
+                    "disagrees_with_survey": edge.disagrees_with_survey,
+                }
+            )
+
+    added = candidates.add_many(queued)
+    waiting = candidates.all()
+    return ImportSummary(
+        filenames=filenames,
+        added=len(added),
+        already_known=already_known,
+        already_waiting=found - len(added),
+        unsettled=unsettled,
+        candidates=[_as_import_candidate(graph, c, waiting) for c in waiting],
+    )
+
+
+@app.get(
+    "/admin/import/candidates",
+    response_model=list[ImportCandidate],
+    summary="Everything read from a drawing and not yet decided on",
+)
+def get_import_candidates(
+    graph: CampusGraph = Depends(get_graph),
+    candidates: CandidateStore = Depends(get_candidates),
+) -> list[ImportCandidate]:
+    waiting = candidates.all()
+    return [_as_import_candidate(graph, c, waiting) for c in waiting]
+
+
+@app.patch(
+    "/admin/import/candidates/{candidate_id}",
+    response_model=ImportCandidate,
+    summary="Correct a candidate before approving it",
+    responses={404: {"description": "No candidate with that id."}},
+)
+def patch_import_candidate(
+    candidate_id: str,
+    changes: CandidateUpdateRequest,
+    graph: CampusGraph = Depends(get_graph),
+    candidates: CandidateStore = Depends(get_candidates),
+) -> ImportCandidate:
+    """Change what would be written, without writing any of it yet.
+
+    This is where a stand-in name becomes a real one, and where somebody who
+    knows the building says a corridor is stairs or is rained on - the two
+    things a drawing is least able to say for itself.
+    """
+    candidate = candidates.get(candidate_id)
+    if candidate is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No candidate {candidate_id!r}.",
+        )
+
+    try:
+        wanted = changes.changes_for(candidate.kind)
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)
+        ) from error
+
+    updated = candidates.replace_fields(candidate_id, wanted)
+    # A name somebody has actually typed is no longer a stand-in.
+    if "name" in wanted:
+        updated = candidates.mark_named(candidate_id) or updated
+
+    return _as_import_candidate(graph, updated, candidates.all())
+
+
+@app.post(
+    "/admin/import/candidates/{candidate_id}/approve",
+    response_model=CandidateReviewResult,
+    summary="Put one candidate into the map",
+    responses={
+        404: {"description": "No candidate with that id."},
+        409: {"description": "Something it depends on has not been approved."},
+    },
+)
+def approve_import_candidate(
+    candidate_id: str,
+    request: Request,
+    graph: CampusGraph = Depends(get_graph),
+    candidates: CandidateStore = Depends(get_candidates),
+) -> CandidateReviewResult:
+    """Approve one candidate, which is the moment it becomes real.
+
+    It goes into the overrides file, so it is live immediately - routable and
+    searchable - and appears in /admin/pending awaiting graduation into the
+    survey, exactly like a place added by hand.
+    """
+    candidate = candidates.get(candidate_id)
+    if candidate is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No candidate {candidate_id!r}.",
+        )
+
+    updated = _approve_one(request, graph, candidate, candidates)
+    candidates.remove(candidate_id)
+    return CandidateReviewResult(
+        id=candidate.id,
+        target_id=candidate.target_id,
+        approved=True,
+        node_count=len(updated.nodes),
+        edge_count=len(updated.edges),
+        remaining=len(candidates.all()),
+    )
+
+
+def _approve_one(
+    request: Request,
+    graph: CampusGraph,
+    candidate: Candidate,
+    candidates: CandidateStore,
+) -> CampusGraph:
+    """Write one candidate into the overrides file, or say why it cannot be."""
+    if candidate.kind == "edge":
+        missing = [
+            end
+            for end in (candidate.fields["from"], candidate.fields["to"])
+            if end not in graph.nodes
+        ]
+        if missing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"{', '.join(missing)} is not on the map yet. Approve the "
+                    "place before the link that leads to it."
+                ),
+            )
+
+    if candidate.kind == "node":
+        if candidate.target_id in graph.nodes:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"A place with id {candidate.target_id!r} already exists.",
+            )
+        fields = dict(candidate.fields)
+        return _apply_change(request, lambda path: add_node(path, candidate.target_id, fields))
+
+    if candidate.target_id in graph.edges_by_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"A link with id {candidate.target_id!r} already exists.",
+        )
+    fields = dict(candidate.fields)
+    return _apply_change(request, lambda path: add_edge(path, candidate.target_id, fields))
+
+
+@app.post(
+    "/admin/import/approve-all",
+    response_model=BulkApprovalResult,
+    summary="Put every candidate into the map, places before links",
+)
+def approve_all_import_candidates(
+    request: Request,
+    graph: CampusGraph = Depends(get_graph),
+    candidates: CandidateStore = Depends(get_candidates),
+) -> list[CandidateReviewResult]:
+    """Approve everything waiting, in an order that can actually be applied.
+
+    Places first: a link cannot be added before the places at its ends exist,
+    and asking a reviewer to work that out for themselves would make the
+    button useless on any real drawing.
+    """
+    waiting = candidates.all()
+    ordered = [c for c in waiting if c.kind == "node"] + [
+        c for c in waiting if c.kind == "edge"
+    ]
+
+    approved: list[CandidateReviewResult] = []
+    skipped: list[SkippedCandidate] = []
+
+    for candidate in ordered:
+        # The graph changes underneath each approval, so it is re-read rather
+        # than captured once: the place approved a moment ago is what makes
+        # the link after it approvable at all.
+        current = get_graph(request)
+        try:
+            updated = _approve_one(request, current, candidate, candidates)
+        except HTTPException as refusal:
+            # One candidate that cannot be applied is not a reason to abandon
+            # the rest, and it is certainly not a reason to throw away the
+            # report of everything already approved - those changes are on the
+            # map by now whatever this response says. It stays in the queue,
+            # because nobody has decided anything about it.
+            skipped.append(
+                SkippedCandidate(
+                    id=candidate.id,
+                    target_id=candidate.target_id,
+                    reason=str(refusal.detail),
+                )
+            )
+            continue
+
+        candidates.remove(candidate.id)
+        approved.append(
+            CandidateReviewResult(
+                id=candidate.id,
+                target_id=candidate.target_id,
+                approved=True,
+                node_count=len(updated.nodes),
+                edge_count=len(updated.edges),
+                remaining=len(candidates.all()),
+            )
+        )
+
+    return BulkApprovalResult(
+        approved=approved, skipped=skipped, remaining=len(candidates.all())
+    )
+
+
+@app.delete(
+    "/admin/import/candidates/{candidate_id}",
+    response_model=CandidateReviewResult,
+    summary="Throw one candidate away",
+    responses={404: {"description": "No candidate with that id."}},
+)
+def reject_import_candidate(
+    candidate_id: str,
+    graph: CampusGraph = Depends(get_graph),
+    candidates: CandidateStore = Depends(get_candidates),
+) -> CandidateReviewResult:
+    """Discard a candidate. It was never live, so nothing has to be undone."""
+    candidate = candidates.get(candidate_id)
+    if candidate is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No candidate {candidate_id!r}.",
+        )
+
+    candidates.remove(candidate_id)
+    return CandidateReviewResult(
+        id=candidate.id,
+        target_id=candidate.target_id,
+        approved=False,
+        node_count=len(graph.nodes),
+        edge_count=len(graph.edges),
+        remaining=len(candidates.all()),
     )
 
 

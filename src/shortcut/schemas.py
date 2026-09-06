@@ -58,6 +58,12 @@ __all__ = [
     "RouteChoices",
     "PendingChange",
     "PendingChanges",
+    "BulkApprovalResult",
+    "CandidateReviewResult",
+    "CandidateUpdateRequest",
+    "ImportCandidate",
+    "ImportSummary",
+    "SkippedCandidate",
 ]
 
 
@@ -1102,3 +1108,173 @@ class PendingChanges(BaseModel):
     live_only: int = Field(
         ge=0, description="How many are only a passing condition, and would stay."
     )
+
+
+# --------------------------------------------------------------------------
+# Reading a drawing into changes somebody reviews
+# --------------------------------------------------------------------------
+
+
+class ImportCandidate(BaseModel):
+    """One place or link read from a drawing, waiting to be decided on.
+
+    Not in the map yet, in any sense: it routes nobody and appears in no
+    search. Approving is what moves it into the overrides file and makes it
+    real, which is also the moment it starts showing up in
+    :class:`PendingChanges` alongside everything else added by hand.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(description="Id of the candidate itself, for approving it.")
+    kind: Literal["node", "edge"]
+    target_id: str = Field(description="The id it would take in the map.")
+    label: str = Field(description="Readable name, for showing in a list.")
+    fields: dict[str, Any] = Field(
+        description="What would be written, field by field, once approved."
+    )
+    source: str = Field(default="", description="Which file and page it came from.")
+    marks: list[str] = Field(
+        default_factory=list,
+        description=(
+            "What the drawing wrote on a link - 'stairs', 'Wheelchair'. Kept "
+            "as written, so a reviewer can see why the flags were set."
+        ),
+    )
+    disagrees_with_survey: bool = Field(
+        default=False,
+        description=(
+            "True when this link joins two places already surveyed, between "
+            "which the survey has no link. Either the drawing is newer than "
+            "the survey, or older and means different places by the same "
+            "names - a question for a person, not a plain addition."
+        ),
+    )
+    name_is_a_stand_in: bool = Field(
+        default=False,
+        description="True when the name was generated from the drawn label.",
+    )
+    blocked_by: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Candidates that have to be approved first. A link cannot be "
+            "added before the places at its ends exist."
+        ),
+    )
+
+
+class ImportSummary(BaseModel):
+    """What one upload found, before anybody has decided anything."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    filenames: list[str]
+    added: int = Field(ge=0, description="How many candidates joined the queue.")
+    already_known: int = Field(
+        ge=0, description="Places and links the map already has, so not offered."
+    )
+    already_waiting: int = Field(
+        ge=0,
+        description=(
+            "Candidates this upload found that were already in the queue, so "
+            "re-uploading a drawing does not double the list."
+        ),
+    )
+    unsettled: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Lines the drawing did not settle: an end touching no place, a "
+            "time written '?s'. Reported rather than guessed at."
+        ),
+    )
+    candidates: list[ImportCandidate]
+
+
+class CandidateUpdateRequest(BaseModel):
+    """A reviewer's corrections, before approving.
+
+    Every field is optional and only the ones sent are changed, so a screen
+    that edits one box does not have to send back the whole candidate.
+    """
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    # A place.
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    building: str | None = Field(default=None, min_length=1, max_length=60)
+    floor: str | None = Field(default=None, min_length=1, max_length=20)
+    type: str | None = Field(default=None, min_length=1, max_length=40)
+
+    # A link.
+    walk_seconds: float | None = Field(default=None, gt=0)
+    distance_m: float | None = Field(default=None, gt=0)
+    covered: bool | None = None
+    stairs: bool | None = None
+    lift: bool | None = None
+
+    def changes_for(self, kind: str) -> dict[str, Any]:
+        """The fields that were actually sent, checked against the kind.
+
+        Raises:
+            ValueError: a field was sent that this kind of candidate has no
+                place for - a walking time on a place, say. Silently dropping
+                it would look like the edit worked.
+        """
+        node_only = {"name", "building", "floor", "type"}
+        edge_only = {"walk_seconds", "distance_m", "covered", "stairs", "lift"}
+        sent = {
+            name: value
+            for name, value in self.model_dump().items()
+            if value is not None
+        }
+        wrong = sent.keys() & (edge_only if kind == "node" else node_only)
+        if wrong:
+            raise ValueError(
+                f"A {kind} has no {', '.join(sorted(wrong))}. "
+                f"Change one of: {', '.join(sorted(node_only if kind == 'node' else edge_only))}."
+            )
+        return sent
+
+
+class CandidateReviewResult(BaseModel):
+    """What happened to one candidate."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    target_id: str
+    approved: bool = Field(
+        description="True if it is now in the map, false if it was thrown away."
+    )
+    node_count: int = Field(ge=0, description="Places on the map afterwards.")
+    edge_count: int = Field(ge=0, description="Links on the map afterwards.")
+    remaining: int = Field(ge=0, description="Candidates still waiting for review.")
+
+
+class SkippedCandidate(BaseModel):
+    """One candidate a bulk approval could not apply, and why."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    target_id: str
+    reason: str = Field(description="Why it could not be applied, in full.")
+
+
+class BulkApprovalResult(BaseModel):
+    """What a bulk approval actually did, item by item.
+
+    Approving in bulk makes a series of real, permanent changes, so one item
+    failing cannot be allowed to discard the report of the ones that already
+    worked. An earlier version let the failure propagate: thirty-six places
+    went live and the caller got a bare error implying nothing had happened.
+
+    Anything skipped stays in the queue - it was never decided on, so it is
+    still waiting for somebody.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    approved: list[CandidateReviewResult]
+    skipped: list[SkippedCandidate]
+    remaining: int = Field(ge=0, description="Candidates still waiting afterwards.")

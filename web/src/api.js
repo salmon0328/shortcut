@@ -119,6 +119,36 @@ export const fetchReportGroups = () => request("/reports/groups");
 /** Everything sitting in the overrides file, not yet folded into the survey. */
 export const fetchPendingChanges = () => request("/admin/pending");
 
+// --- reading a drawing into changes to review -----------------------------
+//
+// Nothing here is on the map. A candidate routes nobody and appears in no
+// search until it is approved, which is the moment it moves into the
+// overrides file and starts behaving like a place added by hand.
+
+/** Upload one or more node-map PDFs and queue whatever the map lacks. */
+export function importDrawings(files) {
+  const form = new FormData();
+  for (const file of files) form.append("files", file);
+  return request("/admin/import", { method: "POST", body: form });
+}
+
+export const fetchImportCandidates = () => request("/admin/import/candidates");
+
+/** Correct a candidate before approving it. Only send what changed. */
+export const updateImportCandidate = (id, changes) =>
+  patchJson(`/admin/import/candidates/${encodeURIComponent(id)}`, changes);
+
+export const approveImportCandidate = (id) =>
+  postJson(`/admin/import/candidates/${encodeURIComponent(id)}/approve`, {});
+
+export const approveAllImportCandidates = () =>
+  postJson("/admin/import/approve-all", {});
+
+export const rejectImportCandidate = (id) =>
+  request(`/admin/import/candidates/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+
 /** Approve or reject one group of reports. `action` is "approve" or "reject". */
 export const reviewReportGroup = (key, action) =>
   postJson(`/reports/groups/${encodeURIComponent(key)}/${action}`, {});

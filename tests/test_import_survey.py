@@ -35,7 +35,8 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 import import_survey  # noqa: E402
-import nodemap  # noqa: E402
+
+from shortcut import nodemap  # noqa: E402
 
 
 @pytest.fixture(scope="module")

@@ -294,6 +294,98 @@ textarea:focus-visible {
   outline-offset: 1px;
 }
 
+/* --- reading a drawing into changes to review --- */
+
+.import-card {
+  margin-bottom: 0.75rem;
+}
+
+/* A contradiction with the survey is not an ordinary addition, and the card
+   should not look like one. */
+.import-card.is-disagreement {
+  border-left: 3px solid var(--warn);
+}
+
+.import-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.import-head h3 {
+  margin: 0;
+}
+
+.import-note {
+  margin: 0.5rem 0 0;
+  padding: 0.5rem 0.65rem;
+  font-size: 0.85rem;
+  border-radius: 0.5rem;
+}
+
+.import-note.warn {
+  color: var(--warn);
+  background: var(--warn-soft);
+}
+
+.import-note.info {
+  color: var(--muted);
+  background: var(--page);
+}
+
+.import-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.import-field {
+  display: block;
+  margin: 0;
+  font-weight: 400;
+}
+
+.import-field span {
+  display: block;
+  margin-bottom: 0.2rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.import-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  grid-column: 1 / -1;
+}
+
+.import-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.import-actions button {
+  width: auto;
+  margin: 0;
+}
+
+/* Read but not offered, so it reads as a list of questions rather than a
+   list of things to do. */
+.unsettled-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.unsettled-list li {
+  margin-bottom: 0.25rem;
+}
+
 /* --- the plain-language box --- */
 
 .ask {
