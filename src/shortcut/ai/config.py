@@ -29,6 +29,7 @@ __all__ = [
     "AiSettings",
     "BEDROCK_MODEL_ID",
     "BEDROCK_MODEL_ID_APAC",
+    "BEDROCK_MODEL_ID_US",
     "MAX_GATE_RETRIES",
     "MAX_REPLANS",
     "MAX_TOOL_CALLS",
@@ -48,6 +49,13 @@ BEDROCK_MODEL_ID = "global.anthropic.claude-haiku-4-5-20251001-v1:0"
 BEDROCK_MODEL_ID_APAC = "apac.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 DEFAULT_REGION = "ap-southeast-1"
+
+#: The regional inference profile for the US regions. Which prefix a model id
+#: needs depends on where it is called: the same model is "global.", "apac."
+#: or "us." depending on the region, and only one of them resolves in any
+#: given one. scripts/check_bedrock.py lists what a region actually offers
+#: rather than leaving anybody to guess between them.
+BEDROCK_MODEL_ID_US = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 
 # --------------------------------------------------------------------------
@@ -108,7 +116,14 @@ def load_settings(project_root: Path | None = None) -> AiSettings:
     load_dotenv(root / ".env")
     return AiSettings(
         model_id=os.environ.get("MODEL_ID") or BEDROCK_MODEL_ID,
-        region=os.environ.get("AWS_REGION") or DEFAULT_REGION,
+        # Bedrock gets its own region setting, separate from everything else
+        # AWS. The two genuinely differ here: the account's organisation
+        # policy denies Bedrock inference in most regions and allows it in
+        # one, while the photo bucket lives somewhere else again. Folding both
+        # into AWS_REGION means fixing one by breaking the other.
+        region=os.environ.get("BEDROCK_REGION")
+        or os.environ.get("AWS_REGION")
+        or DEFAULT_REGION,
         profile=os.environ.get("AWS_PROFILE") or None,
         mock_mode=_truthy(os.environ.get("MOCK_MODE"), default=True),
     )
