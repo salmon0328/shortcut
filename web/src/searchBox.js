@@ -5,7 +5,7 @@
 // id of whatever was actually chosen, and forgets it the moment the text is
 // edited, so the box can never read one place while meaning another.
 
-import { getNodes } from "./data.js";
+import { getNodes, placeWhere } from "./data.js";
 
 // Enough to scan without scrolling, once something has been typed. With the
 // box still empty there is nothing to rank by, so the cap would only ever
@@ -43,7 +43,7 @@ function suggestionsFor(query, prefer) {
     .map((entry) => entry.node);
 }
 
-const labelFor = (node) => `${node.name} (${node.building} · ${node.floor})`;
+const labelFor = (node) => `${node.name} (${placeWhere(node)})`;
 
 /**
  * Turn an input and a list element into a place picker.
@@ -125,7 +125,9 @@ export function createSearchBox(input, list, onChange = () => {}, options = {}) 
 
       const where = document.createElement("span");
       where.className = "suggestion-where";
-      where.textContent = `${node.building} · Level ${node.floor}`;
+      where.textContent = node.floor
+        ? `${node.building} · Level ${node.floor}`
+        : node.building;
 
       item.append(name, where);
       // mousedown, not click: it fires before the input loses focus, so the

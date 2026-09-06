@@ -67,12 +67,13 @@ def test_an_alias_resolves_to_the_surveyed_name(graph: CampusGraph) -> None:
 def test_a_lift_on_each_floor_is_asked_about_rather_than_guessed(
     graph: CampusGraph,
 ) -> None:
-    """There is a lift on B5 and a lift on B4, and both are called "Lift".
+    """Every floor has a lift lobby, and they are all called the same thing.
 
     This is the whole reason the resolver reports ambiguity instead of
     ranking it away. Before B4 was surveyed, "lift" had one answer; the
-    moment a second floor arrived it had two, and a resolver that quietly
-    kept picking the first would now be wrong half the time.
+    moment a second floor arrived it had two, and B3 made it three. Every one
+    of them has to be offered - the caller builds its buttons from this list,
+    so a floor left out is a floor nobody can choose.
     """
     resolution = resolve_place(graph, "lift")
 
@@ -80,6 +81,7 @@ def test_a_lift_on_each_floor_is_asked_about_rather_than_guessed(
     assert {match.node_id for match in resolution.alternatives} == {
         "Hive_B5_A",
         "Hive_B4_A",
+        "Hive_B3_A",
     }
 
 
@@ -130,7 +132,7 @@ def test_a_near_miss_never_outranks_a_real_match(graph: CampusGraph) -> None:
 def test_two_places_of_the_same_name_are_not_guessed_between(
     graph: CampusGraph,
 ) -> None:
-    """'Staircase 1' is on B5 and on B4. Picking one would be wrong half the time."""
+    """'Staircase 1' is on three floors. Picking one would be wrong twice over."""
     resolution = resolve_place(graph, "staircase 1")
 
     assert resolution.resolved is None
@@ -138,6 +140,7 @@ def test_two_places_of_the_same_name_are_not_guessed_between(
     assert {match.node_id for match in resolution.alternatives} == {
         "Hive_B5_C",
         "Hive_B4_C",
+        "Hive_B3_C",
     }
 
 
@@ -175,7 +178,50 @@ def test_an_ambiguous_phrase_produces_a_question_naming_both(
     question = resolve_place(graph, "staircase 1").question
 
     assert question is not None
-    assert "B4" in question and "B5" in question
+    for floor in ("B3", "B4", "B5"):
+        assert floor in question, "a floor left out of the question cannot be picked"
+
+
+def test_a_question_stops_listing_places_once_there_are_too_many(
+    graph: CampusGraph,
+) -> None:
+    """Three names is a question; eight is a list, and nobody reads a list.
+
+    The full set stays in ``alternatives`` either way - it is what the
+    buttons are built from. Only the sentence gives up.
+    """
+    from shortcut.ai.places import PlaceMatch, PlaceResolution
+
+    many = [
+        PlaceMatch(f"N{i}", "Toilet", "Hive", f"B{i}", 1.0, "name matches exactly")
+        for i in range(5)
+    ]
+    resolution = PlaceResolution(
+        phrase="toilet",
+        resolved=None,
+        alternatives=many,
+        ambiguous=True,
+        reason="more than one place goes by that name",
+    )
+
+    assert resolution.question == "There are 5 places called that. Which did you mean?"
+
+
+def test_a_place_with_no_floor_is_named_without_a_dangling_separator() -> None:
+    """A place can have no floor - outdoors, at road level - and "(Hive · )"
+    is a field showing through rather than a description of anywhere.
+
+    Checked against the type rather than the survey: every place in the map
+    happens to have a floor today, and a test that needed one without would
+    keep breaking on somebody filling a blank in.
+    """
+    from shortcut.ai.places import PlaceMatch
+
+    outdoors = PlaceMatch("X", "Zebra Crossing", "Hive-SS", "", 1.0, "why")
+    indoors = PlaceMatch("Y", "Lift Lobby", "Hive", "B4", 1.0, "why")
+
+    assert outdoors.label == "Zebra Crossing (Hive-SS)"
+    assert indoors.label == "Lift Lobby (Hive · B4)"
 
 
 def test_a_resolved_phrase_asks_nothing(graph: CampusGraph) -> None:

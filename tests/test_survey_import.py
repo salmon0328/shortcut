@@ -15,7 +15,7 @@ import pytest
 
 from shortcut.graph_store import CampusGraph
 from shortcut.nodemap import read_uploaded_pdf
-from shortcut.survey_import import ImportReading, read_candidates
+from shortcut.survey_import import ImportReading, PlanCalibration, read_candidates
 
 NODE_MAP = Path(__file__).resolve().parents[1] / "data" / "survey_sources" / "hive_node_map.pdf"
 
@@ -175,6 +175,65 @@ def test_a_floor_the_label_does_not_give_is_left_blank_not_borrowed(
     for node in reading.nodes:
         if node.floor:
             assert node.node_id.replace("_", "-").split("-")[1] == node.floor
+
+
+# --------------------------------------------------------------------------
+# Where a place ends up
+# --------------------------------------------------------------------------
+
+
+def test_a_position_is_stored_in_metres_not_as_a_fraction(
+    graph: CampusGraph, drawing: tuple
+) -> None:
+    """The drawing measures in fractions of a plan; the map works in metres.
+
+    Storing the fraction is not an error anything can detect - 0.57 is a
+    perfectly good coordinate - it just draws every imported place within a
+    few pixels of the top-left corner of its floorplan, on top of each other.
+    """
+    calibration = PlanCalibration(
+        origin_x_m=0.0,
+        origin_y_m=0.0,
+        metres_per_pixel=0.03,
+        width_px=2000,
+        height_px=1600,
+    )
+    reading = read_candidates(
+        graph, drawing, calibrations={("Hive", "B1"): calibration}
+    )
+
+    placed = [n for n in reading.nodes if n.floor == "B1" and n.x is not None]
+    assert placed, "sanity: B1 places are drawn on a plan and not yet surveyed"
+    for node in placed:
+        assert node.x > 1.0 or node.y > 1.0, f"{node.node_id} looks like a fraction"
+        assert node.x <= 2000 * 0.03
+        assert node.y <= 1600 * 0.03
+
+
+def test_a_floor_with_no_measured_plan_gets_no_position(
+    graph: CampusGraph, drawing: tuple
+) -> None:
+    """An unplaced place is a gap the map can report. A place given a made-up
+    position is drawn confidently in the wrong spot, which is worse."""
+    reading = read_candidates(graph, drawing, calibrations={})
+
+    assert all(node.x is None and node.y is None for node in reading.nodes)
+
+
+def test_the_conversion_is_the_one_the_floorplan_was_measured_with() -> None:
+    """A fraction of the plan, times that plan's own size and scale."""
+    calibration = PlanCalibration(
+        origin_x_m=0.0,
+        origin_y_m=0.0,
+        metres_per_pixel=0.02912,
+        width_px=2339,
+        height_px=1990,
+    )
+
+    assert calibration.to_metres((0.5, 0.5)) == (
+        round(0.5 * 2339 * 0.02912, 2),
+        round(0.5 * 1990 * 0.02912, 2),
+    )
 
 
 def test_a_stand_in_name_is_obviously_one(reading: ImportReading) -> None:

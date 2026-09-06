@@ -332,6 +332,7 @@
           <button type="button" class="tab" data-tab="add-place">Add place</button>
           <button type="button" class="tab" data-tab="add-link">Add link</button>
           <button type="button" class="tab" data-tab="edit">Edit</button>
+          <button type="button" class="tab" data-tab="map">Map</button>
           <button type="button" class="tab" data-tab="import">Import</button>
           <button type="button" class="tab" data-tab="pending">Pending</button>
         </div>
@@ -591,6 +592,26 @@
         </div>
 
         <!-- ----------------------- pending ------------------------ -->
+        <!-- -------------------------- map -------------------------- -->
+        <div id="admin-tab-map" hidden>
+          <div class="card">
+            <h3>What the map says about this floor</h3>
+            <p class="hint">
+              Every place and link the map holds, drawn on the floorplan. A
+              place with nothing joined to it is ringed, because nothing can
+              be routed to it. Links to another floor are drawn as a short
+              stub with a label, since their other end is on a different
+              plan — so a staircase with no stub is one that leads nowhere yet.
+            </p>
+            <button type="button" id="refresh-floor-map" class="secondary small">
+              Refresh
+            </button>
+          </div>
+
+          <div class="floor-map-tabs" id="floor-map-tabs" hidden></div>
+          <div class="floor-map-canvas" id="floor-map-canvas"></div>
+        </div>
+
         <!-- ------------------------ import ------------------------ -->
         <div id="admin-tab-import" hidden>
           <div class="card">

@@ -36,8 +36,40 @@ __all__ = [
     "EdgeCandidate",
     "ImportReading",
     "NodeCandidate",
+    "PlanCalibration",
     "read_candidates",
 ]
+
+
+@dataclass(frozen=True)
+class PlanCalibration:
+    """What turns a place's position on a drawing into a position on the map.
+
+    :mod:`shortcut.nodemap` reads a position as a *fraction* of the plan it is
+    drawn on, which is the only form that survives the same plan being scanned
+    at two resolutions. The rest of the app works in **metres** - the map
+    panel, ``Floorplan.to_pixels`` and every position the earlier survey
+    recorded - so a fraction has to be converted before it is stored, using
+    the scale somebody already fitted for that floor.
+
+    Getting this wrong is not visible in the data: a fraction stored where
+    metres are expected is a perfectly valid number that draws every place in
+    the top-left corner of its floorplan.
+    """
+
+    origin_x_m: float
+    origin_y_m: float
+    metres_per_pixel: float
+    width_px: int
+    height_px: int
+
+    def to_metres(self, fraction: tuple[float, float]) -> tuple[float, float]:
+        """A fraction of the plan, as metres on the map."""
+        across, down = fraction
+        return (
+            round(self.origin_x_m + across * self.width_px * self.metres_per_pixel, 2),
+            round(self.origin_y_m + down * self.height_px * self.metres_per_pixel, 2),
+        )
 
 
 #: Words a drawing writes on a line to say how it is walked. Read as a
@@ -146,21 +178,26 @@ def _flags_from(marks: tuple[str, ...]) -> tuple[bool, bool]:
     return bool(lowered & _STAIRS_MARKS), bool(lowered & _LIFT_MARKS)
 
 
-def _building_and_floor(drawn_name: str) -> tuple[str, str]:
-    """Read a place's building and floor out of its own label.
+def _building_and_floor(drawn_name: str, page_floor: str = "") -> tuple[str, str]:
+    """Read a place's building and floor from its label, then from its page.
 
-    ``Hive-B3-D`` says both. Anything that does not gets an empty floor
-    rather than a borrowed one: the older importer took it from the page
-    number, which only works for the one file whose page order it knows.
-    An empty floor shows up in the review panel as a box to fill in, which
-    is the honest version of not knowing.
+    ``Hive-B3-D`` says both itself. Plenty do not: the walkway, the canteen
+    and the four unnamed Hive doors are labelled ``Hive-SS-Walkway-A``,
+    ``SS-Canteen-B``, ``Hive-A``. For those the page is the authority, and
+    it is a real one - a page headed "Hive + SS B4" states the floor in its
+    own title, which is different in kind from the older importer taking it
+    from a hardcoded page number.
+
+    Still empty when neither says. Some places genuinely have no floor: the
+    walkway between the buildings is outdoors at road level, and inventing a
+    floor for it would be filling a field rather than recording a fact.
     """
     parts = drawn_name.split("-")
-    if drawn_name.startswith("Hive-SS-Walkway"):
-        return "Hive-SS", ""
+    building = "Hive-SS" if drawn_name.startswith("Hive-SS-Walkway") else parts[0]
+
     if len(parts) >= 3 and parts[1].startswith("B") and parts[1][1:].isdigit():
-        return parts[0], parts[1]
-    return parts[0], ""
+        return building, parts[1]
+    return building, page_floor
 
 
 def _stand_in_name(drawn_name: str) -> str:
@@ -173,16 +210,27 @@ def _stand_in_name(drawn_name: str) -> str:
 
 
 def read_candidates(
-    graph: CampusGraph, extractions: tuple[Extraction, ...], *, filename: str = ""
+    graph: CampusGraph,
+    extractions: tuple[Extraction, ...],
+    *,
+    filename: str = "",
+    calibrations: dict[tuple[str, str], PlanCalibration] | None = None,
 ) -> ImportReading:
     """Everything in ``extractions`` that ``graph`` does not already have.
 
     Both ends of a link must be a place that exists or is being added in the
     same reading, so approving the whole set can never leave an edge pointing
     at nothing.
+
+    ``calibrations`` says how to turn a position on a drawing into metres, per
+    building and floor. A place on a floor with no calibrated plan gets **no
+    position at all** rather than a raw fraction: an unplaced place is a gap
+    the map can report, while a fraction stored as metres is a place drawn
+    confidently in the wrong spot.
     """
     reading = ImportReading()
     where = f"{filename} " if filename else ""
+    calibrations = calibrations or {}
 
     # -- places ------------------------------------------------------------
     seen: dict[str, NodeCandidate] = {}
@@ -195,15 +243,21 @@ def read_candidates(
             if node_id in seen:
                 continue  # the same place drawn on two plans
 
-            building, floor = _building_and_floor(place.name)
+            building, floor = _building_and_floor(place.name, extraction.floor)
             fraction = place.fraction
+            calibration = calibrations.get((building, floor))
+            at = (
+                calibration.to_metres(fraction)
+                if fraction is not None and calibration is not None
+                else None
+            )
             seen[node_id] = NodeCandidate(
                 node_id=node_id,
                 name=_stand_in_name(place.name),
                 building=building,
                 floor=floor,
-                x=fraction[0] if fraction else None,
-                y=fraction[1] if fraction else None,
+                x=at[0] if at else None,
+                y=at[1] if at else None,
                 source=f"{where}page {extraction.page + 1}",
             )
 

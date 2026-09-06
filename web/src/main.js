@@ -9,6 +9,7 @@ import "./style.css";
 import { refreshQueue } from "./admin.js";
 import { refreshMapEditor } from "./adminMap.js";
 import { refresh as refreshImport } from "./importReview.js";
+import { showFloor } from "./floorMap.js";
 import { loadReferenceData } from "./data.js";
 import { refreshPending } from "./pending.js";
 import {
@@ -105,6 +106,7 @@ const adminTabs = {
   "add-link": document.querySelector("#admin-tab-add-link"),
   edit: document.querySelector("#admin-tab-edit"),
   import: document.querySelector("#admin-tab-import"),
+  map: document.querySelector("#admin-tab-map"),
   pending: document.querySelector("#admin-tab-pending"),
 };
 
@@ -123,10 +125,25 @@ function showAdminTab(name) {
     refreshPending();
   } else if (name === "import") {
     refreshImport();
+  } else if (name === "map") {
+    refreshFloorMap();
   } else {
     refreshMapEditor();
   }
 }
+
+const floorMapCanvas = document.querySelector("#floor-map-canvas");
+const floorMapTabs = document.querySelector("#floor-map-tabs");
+
+/** Redraw the floor map, keeping whichever floor is already being looked at. */
+function refreshFloorMap() {
+  const active = floorMapTabs.querySelector(".floor-tab.is-active");
+  showFloor(floorMapCanvas, floorMapTabs, active?.dataset.key ?? null);
+}
+
+document
+  .querySelector("#refresh-floor-map")
+  .addEventListener("click", refreshFloorMap);
 
 for (const button of document.querySelectorAll(".tab")) {
   button.addEventListener("click", () => showAdminTab(button.dataset.tab));

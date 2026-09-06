@@ -224,27 +224,36 @@ def test_a_link_between_unknown_places_is_refused(client: TestClient) -> None:
 
 
 def test_a_standalone_link_changes_routing(client: TestClient) -> None:
-    """A new shortcut should be used when it really is shorter."""
+    """A new shortcut should be used when it really is shorter.
+
+    Staircase 1 to the Main Entrance is the longest way round on B5 that the
+    survey has no direct link for, which is what makes it a fair test of a
+    shortcut. It used to use Lift Lobby to Pick Lockers, until the node-map
+    import added a real link between exactly those two - at which point the
+    "before" route was already direct and the shortcut had nothing to beat.
+    """
+    origin, destination = "Hive_B5_C", "Hive_B5_I"
     before = client.post(
-        "/route", json={"origin": "Hive_B5_A", "destination": "Hive_B5_F"}
+        "/route", json={"origin": origin, "destination": destination}
     ).json()
 
-    client.post(
+    created = client.post(
         "/admin/edges",
         json={
-            "from_id": "Hive_B5_A",
-            "to_id": "Hive_B5_F",
+            "from_id": origin,
+            "to_id": destination,
             "distance_m": 1.0,
             "walk_seconds": 1.0,
             "covered": True,
         },
     )
+    assert created.status_code == 201, created.json()
 
     after = client.post(
-        "/route", json={"origin": "Hive_B5_A", "destination": "Hive_B5_F"}
+        "/route", json={"origin": origin, "destination": destination}
     ).json()
     assert after["total_walk_seconds"] < before["total_walk_seconds"]
-    assert after["nodes"] == ["Hive_B5_A", "Hive_B5_F"]
+    assert after["nodes"] == [origin, destination]
 
 
 def test_a_link_can_be_added_between_two_existing_places(

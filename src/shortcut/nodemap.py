@@ -71,6 +71,12 @@ _PLACE_NAME = re.compile(r"^(?:Hive|SS|S3)(?:-[A-Za-z0-9]+)+$")
 # they did not measure, and is carried through as a question rather than a zero.
 _TIME = re.compile(r"^(\d+|\?)s$")
 
+# The floor a page is titled with. A page headed "Hive + SS B4" carries a
+# bare "B4"; a place label carries its floor joined to the rest of the name
+# ("Hive-B4-C"), so a standalone token like this only ever comes from the
+# title.
+_PAGE_FLOOR = re.compile(r"^B[0-9]$")
+
 # How near a line's end must come to a square to count as touching it, as a
 # multiple of that page's square size. Ends that touch sit about half a square
 # away, because the line is drawn to the square's edge rather than its middle.
@@ -171,6 +177,15 @@ class Extraction:
     plans: tuple[Plan, ...]
     places: tuple[Place, ...]
     lines: tuple[Line, ...]
+    #: The floor this page is titled with - "B4" from a page headed "Hive + SS
+    #: B4" - or "" on a page that does not say.
+    #:
+    #: Worth having because a place is not always named after the floor it is
+    #: on. The walkway, the canteen and the four unnamed Hive doors are all
+    #: labelled without one, and the only thing that says which floor they
+    #: belong to is the page they were drawn on. That is not a guess: the page
+    #: says so in its own title.
+    floor: str = ""
 
 
 def node_id_for(name: str) -> str:
@@ -390,7 +405,17 @@ def extract_page(document: pymupdf.Document, page_number: int) -> Extraction:
             )
         )
 
-    return Extraction(page_number, tuple(plans), tuple(places), tuple(lines))
+    titled = [text for text, _ in words if _PAGE_FLOOR.match(text)]
+
+    return Extraction(
+        page_number,
+        tuple(plans),
+        tuple(places),
+        tuple(lines),
+        # Only when the page says one thing. Two would mean this is not a
+        # title at all, and inventing a floor is the mistake being avoided.
+        floor=titled[0] if len(set(titled)) == 1 else "",
+    )
 
 
 def read_node_map(

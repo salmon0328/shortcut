@@ -21,6 +21,8 @@ then open http://127.0.0.1:8000/docs to try the endpoints in a browser.
 from __future__ import annotations
 
 import logging
+
+import pymupdf
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -58,7 +60,7 @@ from shortcut.overrides import (
 from shortcut.floorplan_store import FloorplanStore, FloorplanStoreError
 from shortcut.nodemap import read_uploaded_pdf
 from shortcut.photo_store import PhotoStore, PhotoStoreError
-from shortcut.survey_import import read_candidates
+from shortcut.survey_import import PlanCalibration, read_candidates
 from shortcut.report_store import (
     ROUTE_BLOCKING_CONDITIONS,
     ReportStatus,
@@ -1575,6 +1577,41 @@ def get_pending_changes(
 # second way into the map.
 
 
+def _plan_calibrations(
+    floorplans: FloorplanStore,
+) -> dict[tuple[str, str], PlanCalibration]:
+    """The fitted scale for every floor that has a measured plan.
+
+    Positions come off a drawing as a fraction of the plan; the map works in
+    metres. This is what converts between them, and a floor missing from here
+    is a floor whose places arrive without a position - which is the honest
+    outcome, since nothing on record says where its plan sits on the map.
+
+    The image is measured rather than assumed: ``metres_per_pixel`` was fitted
+    against the plan as uploaded, so the fraction has to be multiplied by that
+    same image's size and no other.
+    """
+    calibrations: dict[tuple[str, str], PlanCalibration] = {}
+    for plan in floorplans.all():
+        if not plan.is_calibrated:
+            continue
+        try:
+            image = pymupdf.Pixmap(floorplans.read_file(plan))
+        except Exception:  # noqa: BLE001 - an unreadable plan costs positions, not the upload
+            logger.exception("Could not measure floorplan %s; places on %s %s "
+                             "will arrive without a position.",
+                             plan.id, plan.building, plan.floor)
+            continue
+        calibrations[(plan.building, plan.floor)] = PlanCalibration(
+            origin_x_m=plan.origin_x_m,
+            origin_y_m=plan.origin_y_m,
+            metres_per_pixel=plan.metres_per_pixel,
+            width_px=image.width,
+            height_px=image.height,
+        )
+    return calibrations
+
+
 def _candidate_label(graph: CampusGraph, candidate: Candidate) -> str:
     """How to name a candidate in a list."""
     if candidate.kind == "node":
@@ -1633,6 +1670,7 @@ async def post_admin_import(
     files: list[UploadFile] = File(..., description="Node-map PDFs to read."),
     graph: CampusGraph = Depends(get_graph),
     candidates: CandidateStore = Depends(get_candidates),
+    floorplans: FloorplanStore = Depends(get_floorplans_store),
 ) -> ImportSummary:
     """Read what the drawings say, and queue whatever the map does not have.
 
@@ -1640,6 +1678,8 @@ async def post_admin_import(
     waits for a person - including the lines it could not settle, which are
     reported in the reviewer's own words rather than guessed at.
     """
+    calibrations = _plan_calibrations(floorplans)
+
     filenames: list[str] = []
     queued: list[dict] = []
     unsettled: list[str] = []
@@ -1657,7 +1697,9 @@ async def post_admin_import(
                 detail=f"{name} could not be read as a drawing: {error}",
             ) from error
 
-        reading = read_candidates(graph, extractions, filename=name)
+        reading = read_candidates(
+            graph, extractions, filename=name, calibrations=calibrations
+        )
         filenames.append(name)
         unsettled.extend(reading.unsettled)
         already_known += reading.already_known_nodes + reading.already_known_edges

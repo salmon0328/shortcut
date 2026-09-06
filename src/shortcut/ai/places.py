@@ -90,7 +90,11 @@ class PlaceMatch:
     @property
     def label(self) -> str:
         """How to name this place back to a person, unambiguously."""
-        return f"{self.name} ({self.building} · {self.floor})"
+        # A place with no floor is outdoors - the walkway between the
+        # buildings, a road-level entrance - so the floor is left out rather
+        # than printed as an empty half of a separator.
+        where = " · ".join(part for part in (self.building, self.floor) if part)
+        return f"{self.name} ({where})"
 
 
 def _clean(text: str) -> str:
@@ -205,11 +209,25 @@ class PlaceResolution:
 
     @property
     def question(self) -> str | None:
-        """The clarifying question to ask, if one is needed."""
+        """The clarifying question to ask, if one is needed.
+
+        Names every place in contention, not the first two. Three floors now
+        have a Staircase 1, and asking "B3 or B4?" when B5 fits just as well
+        offers a choice between two wrong answers - the caller builds its
+        buttons from ``alternatives``, so a place left out of the list is a
+        place the person cannot pick at all.
+
+        Past three the sentence stops being readable, so it gives up on
+        listing and says how many there are. The full set is still in
+        ``alternatives`` for whatever is drawing the buttons.
+        """
         if not self.ambiguous or len(self.alternatives) < 2:
             return None
-        first, second = self.alternatives[0], self.alternatives[1]
-        return f"Did you mean {first.label} or {second.label}?"
+
+        labels = [match.label for match in self.alternatives]
+        if len(labels) > 3:
+            return f"There are {len(labels)} places called that. Which did you mean?"
+        return f"Did you mean {', '.join(labels[:-1])} or {labels[-1]}?"
 
 
 def resolve_place(graph: CampusGraph, phrase: str) -> PlaceResolution:
@@ -219,7 +237,8 @@ def resolve_place(graph: CampusGraph, phrase: str) -> PlaceResolution:
 
     * one clear winner - resolved
     * nothing close enough - unresolved, and we say so
-    * two places the phrase fits equally well - unresolved, with both offered
+    * several places the phrase fits equally well - unresolved, with *all* of
+      them offered
     """
     matches = suggest_places(graph, phrase)
 
@@ -245,10 +264,19 @@ def resolve_place(graph: CampusGraph, phrase: str) -> PlaceResolution:
         )
 
     if runner_up is not None and (best.score - runner_up.score) < AMBIGUITY_MARGIN:
+        # Every place within the margin, not the first two. A building with
+        # three floors has three Staircase 1s, and offering two of them is
+        # offering a choice between two wrong answers - the third is then
+        # unreachable, because the buttons are built from this list.
+        tied = [
+            match
+            for match in matches
+            if (best.score - match.score) < AMBIGUITY_MARGIN
+        ]
         return PlaceResolution(
             phrase=phrase,
             resolved=None,
-            alternatives=[best, runner_up],
+            alternatives=tied,
             ambiguous=True,
             reason="more than one place goes by that name",
         )

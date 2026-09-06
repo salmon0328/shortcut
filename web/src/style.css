@@ -294,6 +294,118 @@ textarea:focus-visible {
   outline-offset: 1px;
 }
 
+/* --- the whole of one floor, for an editor --- */
+
+/* Deliberately not .map-canvas / .map-floors / .map-note. Those are absolutely
+   positioned against .map-panel on the route screen; reused here, with no
+   positioned parent, the canvas escapes to cover the whole page and the floor
+   tabs land somewhere off it - which is exactly what happened. This panel
+   sits in ordinary page flow instead. */
+.floor-map-canvas {
+  min-height: 16rem;
+  margin-bottom: 0.75rem;
+  padding: 0.5rem;
+  background: #eef0f6;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+/* Height follows the plan's own proportions rather than the box, so a wide
+   floor is not squashed into a tall panel. */
+.floor-map-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 70vh;
+}
+
+.floor-map-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.floor-map-tabs[hidden] {
+  display: none;
+}
+
+.floor-map-note {
+  margin: 0.4rem 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.floor-map-placeholder {
+  padding: 2rem 1rem;
+  text-align: center;
+}
+
+.floor-map-placeholder-title {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.floor-map-placeholder-detail {
+  margin: 0.35rem 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* Strokes are written in floorplan pixels, so without this a line sized to
+   look right on a 2339px plan would be invisible on screen. */
+.floor-link {
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-opacity: 0.75;
+  vector-effect: non-scaling-stroke;
+}
+
+.floor-link.stairs {
+  stroke: var(--warn);
+  stroke-dasharray: 6 4;
+}
+
+.floor-link.lift {
+  stroke: var(--yes);
+}
+
+/* A stub, not a link: its far end is on another plan entirely. */
+.floor-link.cross-floor {
+  stroke-dasharray: 3 3;
+  stroke-opacity: 0.9;
+}
+
+.floor-pin {
+  fill: var(--accent);
+  stroke: var(--card);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Nothing links to it, so nothing can be routed to it. */
+.floor-pin.is-orphan {
+  fill: var(--danger);
+  stroke: var(--danger-line);
+  stroke-width: 3;
+}
+
+.floor-pin-label,
+.floor-stub-label {
+  fill: var(--ink);
+  paint-order: stroke;
+  stroke: var(--card);
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.floor-stub-label {
+  fill: var(--muted);
+}
+
 /* --- reading a drawing into changes to review --- */
 
 .import-card {

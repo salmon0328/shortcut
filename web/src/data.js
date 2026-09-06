@@ -33,9 +33,13 @@ export const getEdges = () => edges;
 export const nodeName = (nodeId) => nodesById.get(nodeId)?.name ?? nodeId;
 
 /** A place with its building and floor, for when the name alone is ambiguous. */
+/** "Hive · B5", or just "Hive" for somewhere outdoors with no floor. */
+export const placeWhere = (node) =>
+  [node.building, node.floor].filter(Boolean).join(" · ");
+
 export function nodeLabel(nodeId) {
   const node = nodesById.get(nodeId);
-  return node ? `${node.name} (${node.building} · ${node.floor})` : nodeId;
+  return node ? `${node.name} (${placeWhere(node)})` : nodeId;
 }
 
 export const edgeLabel = (edgeId) => edgesById.get(edgeId)?.label ?? edgeId;

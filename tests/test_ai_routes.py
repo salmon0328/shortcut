@@ -206,7 +206,7 @@ def test_what_it_cost_comes_back_with_the_answer(client: TestClient) -> None:
 
 
 def test_an_ambiguous_place_asks_instead_of_guessing() -> None:
-    """There is a lift on B5 and a lift on B4, and both are called "Lift"."""
+    """Every surveyed floor has a lift lobby, and they share one name."""
     app.dependency_overrides[get_llm] = lambda: MockLlm(
         {PARSE_VERSION: intent(destination_phrase="lift")}
     )
@@ -217,7 +217,10 @@ def test_an_ambiguous_place_asks_instead_of_guessing() -> None:
     assert body["request"] is None
     assert body["needs_clarification"] is True
     assert body["question"]
-    assert len(body["destination"]["alternatives"]) == 2
+    # One button per floor that has one. Capping the list would leave a floor
+    # nobody could choose, since the screen builds its buttons from this.
+    offered = {place["floor"] for place in body["destination"]["alternatives"]}
+    assert offered == {"B3", "B4", "B5"}
 
 
 def test_the_places_it_offers_are_ones_you_could_have_picked() -> None:
