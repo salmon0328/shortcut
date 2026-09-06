@@ -16,7 +16,6 @@ from fastapi.testclient import TestClient
 from shortcut.api import app, get_floorplans_store
 from shortcut.floorplan_store import (
     MAX_FLOORPLAN_BYTES,
-    Floorplan,
     FloorplanStore,
     FloorplanStoreError,
 )

@@ -23,6 +23,7 @@ about which is which, because the distinction is the claim the project makes.
 | `prompts.py` | Every prompt, versioned. When an accuracy number moves, the first question is whether the prompt changed |
 | `places.py` | "the lift" → a node id. Aliases, typos, and ambiguity **reported rather than guessed at** |
 | `parser.py` | One model call, no loop, no tools, no decisions |
+| `usage.py` | `TokenUsage`: what a call cost, returned beside every answer. An unmeasured model call is one nobody can budget for |
 | `impact.py` | What closing a place would cost: who gets stranded, how long the way round is. Arithmetic, no model |
 | `verifier.py` | Rates reported problems, prices the change, decides or hands over |
 | `routes.py` | `GET /ai/health`, `POST /ai/parse` |

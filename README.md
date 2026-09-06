@@ -7,8 +7,9 @@ and gets a route that knows what the campus map does not: which corridors are
 covered, which links only exist indoors, which lift is worth waiting for, and
 what other students reported blocked or packed in the last hour.
 
-Built for the IGNITE Agentic AI Hackathon 2026. Surveyed on two floors of the
-Hive: **17 places, 27 links**.
+Built for the IGNITE Agentic AI Hackathon 2026. Surveyed on foot across
+three basement levels of four connected buildings — the Hive, the South
+Spine, S3 and the walkway between them: **40 places, 60 links**.
 
 ## Run it
 
@@ -16,7 +17,7 @@ Hive: **17 places, 27 links**.
 python -m venv .venv
 .venv/bin/pip install -r requirements.txt      # the routing service
 .venv/bin/pip install -r requirements-ai.txt   # the plain-language layer
-.venv/bin/python -m pytest                     # 377 tests, all offline
+.venv/bin/python -m pytest                     # 549 tests, all offline
 
 .venv/bin/uvicorn --app-dir src shortcut.api:app --reload
 ```
@@ -63,19 +64,61 @@ request from recent reports and expires by itself. See
 
 | Path | What it holds |
 |---|---|
-| `data/campus_graph.json` | the survey: 17 places, 27 links. The source of truth |
-| `src/shortcut/api.py` | every HTTP endpoint |
+| `data/campus_graph.json` | the survey: 40 places, 60 links. The source of truth |
+| `src/shortcut/api.py` | every HTTP endpoint (29 of them) |
 | `src/shortcut/tools/astar.py` | route search and the cost functions. No AI |
 | `src/shortcut/graph_store.py` | loading the survey; `Node` and `Edge` |
 | `src/shortcut/overrides.py` | live changes layered over the survey |
 | `src/shortcut/crowding.py` | how busy somewhere is, priced at routing time |
 | `src/shortcut/report_store.py` | problems students have reported |
-| `src/shortcut/photo_store.py` | junction photos, direction-aware |
+| `src/shortcut/photo_store.py` | photos of places, and of reported problems |
+| `src/shortcut/floorplan_store.py` | the plan image each floor is drawn on |
 | `src/shortcut/directions.py` | the words on each step of a route |
+| `src/shortcut/nodemap.py` | reading places and links out of a drawn PDF |
+| `src/shortcut/survey_import.py` | turning that reading into reviewable changes |
+| `src/shortcut/floorplan_build.py` | composing and scaling a floor's plan image |
+| `src/shortcut/candidate_store.py` | the review queue an import waits in |
+| `src/shortcut/blob_store.py` | local disk, or S3 when a bucket is named |
 | `src/shortcut/ai/` | the agentic layer — see `src/shortcut/ai/README.md` |
 | `web/` | the browser front end (vanilla JS + Vite, no framework) |
-| `scripts/` | one-off tools: `check_bedrock.py`, `graduate_overrides.py` |
-| `tests/` | 377 tests, none of which touch the network |
+| `scripts/` | command-line tools — see [scripts/README.md](scripts/README.md) |
+| `tests/` | 549 tests, none of which touch the network |
+
+## Where the AI is, and where it deliberately is not
+
+Two components use a model. Everything else — the search, the costs, the
+thresholds, the map — is ordinary code, and that division is the claim this
+project makes rather than an implementation detail.
+
+| Component | Uses a model? | Plans, acts, adapts? | What it is |
+|---|---|---|---|
+| `ai/parser.py` | yes | **no** — one call, no loop, no decisions | an extraction step |
+| `ai/verifier.py` | yes | **yes** — weighs, prices, moves its own bar, writes | an **agent** |
+| `ai/impact.py` | no | it is a tool | arithmetic on the graph |
+| `tools/astar.py` | no | it is a tool | the route search |
+
+**The parser** turns "courtyard to the canteen, it's raining, I can't do
+stairs" into a route request. It never sees or returns a node id — it returns
+the *phrases* a student used, and `ai/places.py` decides what they refer to,
+because a model that emits ids will eventually emit one that does not exist.
+
+**The Verifier** reads the problems students report, rates each account, asks
+`ai/impact.py` what closing that place would actually cost, raises its own
+threshold when the answer is bad, and then approves, rejects, or hands the
+decision to a person. Three rules hold it together:
+
+- **The model rates; the code decides.** Weights come back from the model, but
+  the comparison against `AUTO_MERGE_THRESHOLD_BLOCKING` happens in Python,
+  against a number the model never sees. Report notes are text typed by
+  strangers.
+- **Closing something costs more than warning about it.** A wrongly shut
+  corridor sends somebody the long way round in the rain; a wrongly flagged
+  busy lobby costs nothing.
+- **Escalating is a real outcome.** Anything that would leave a place with no
+  way in goes to a person however many people reported it. That is the one
+  threshold the agent cannot move, and it is what makes the rest safe.
+
+See `src/shortcut/ai/README.md` for the whole picture.
 
 ## Preferences
 

@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from shortcut.ai.bedrock import LlmError, MockLlm
+from shortcut.ai.bedrock import MockLlm
 from shortcut.ai.impact import assess
 from shortcut.ai.prompts import VERIFY_VERSION
 from shortcut.ai.routes import get_llm

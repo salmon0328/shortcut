@@ -19,6 +19,7 @@ from shortcut.graph_store import CampusGraph, Edge, load_graph, UnknownNodeError
 from shortcut.tools.astar import (
     NoRouteFoundError,
     Route,
+    edge_seconds,
     find_route,
     find_route_or_none,
 )
@@ -239,12 +240,64 @@ def test_a_lift_edge_is_reported(tmp_path: Path) -> None:
     assert route.uses_stairs is False
 
 
-def test_route_is_cheaper_than_a_known_alternative(graph: CampusGraph) -> None:
-    """Sanity check that the search really minimises, rather than just walking."""
-    route = find_route(graph, ORIGIN, DESTINATION)
-    alternative = ("Hive_B5_004", "Hive_B5_010", "Hive_B5_012")  # via Pick Lockers
+def cheapest_by_dijkstra(graph: CampusGraph, origin: str, destination: str) -> float:
+    """The cost of the best route, worked out a completely different way.
 
-    assert route.total_seconds < total_seconds_of(graph, alternative)
+    Deliberately the dullest search that could work: no heuristic, no tie
+    breaking, no priority queue - just relax every edge until nothing
+    improves. It has none of the machinery that makes A* fast and therefore
+    none of the ways A* can be subtly wrong, which is the only reason it is
+    worth having a second implementation in a test at all.
+
+    It scores edges with ``edge_seconds``, the same cost the router defaults
+    to, because the cost function is not what is under test here - the search
+    over it is. Summing bare ``walk_seconds`` instead quietly drops the wait
+    before a shuttle, and then this disagrees with A* about a route where both
+    are right.
+    """
+    best = {origin: 0.0}
+    settled: set[str] = set()
+    while True:
+        here = min(
+            (n for n in best if n not in settled), key=lambda n: best[n], default=None
+        )
+        if here is None:
+            break
+        settled.add(here)
+        for edge in graph.edges_from(here):
+            beyond = edge.other_end(here)
+            through = best[here] + edge_seconds(edge)
+            if through < best.get(beyond, float("inf")):
+                best[beyond] = through
+    return best[destination]
+
+
+def test_the_route_really_is_the_cheapest_one(graph: CampusGraph) -> None:
+    """Sanity check that the search minimises, rather than merely walking.
+
+    Checked against a second search rather than against a hand-picked
+    alternative. The alternative this test used to name went stale the moment
+    somebody deleted an unconfirmed link from the survey, and a test that
+    fails because the map improved teaches nobody anything.
+    """
+    route = find_route(graph, ORIGIN, DESTINATION)
+
+    assert route.total_seconds == cheapest_by_dijkstra(graph, ORIGIN, DESTINATION)
+
+
+def test_no_route_out_of_the_origin_is_cheaper(graph: CampusGraph) -> None:
+    """The same claim, held for every destination at once.
+
+    One route being optimal could be luck. Every route from one place being
+    optimal is the search working.
+    """
+    for destination in graph.nodes:
+        route = find_route_or_none(graph, ORIGIN, destination)
+        if route is None:
+            continue
+        assert route.total_seconds == cheapest_by_dijkstra(
+            graph, ORIGIN, destination
+        ), f"{ORIGIN} -> {destination} is not the cheapest way"
 
 
 def test_search_is_deterministic(graph: CampusGraph) -> None:
@@ -311,16 +364,27 @@ def test_no_blocked_edge_ever_appears_in_a_route(
 
 
 def test_blocking_every_edge_of_a_node_makes_it_unreachable(
+    graph: CampusGraph,
     graph_with_blocked_edges: Callable[[set[str]], CampusGraph],
 ) -> None:
-    """The Main Staircase has three ways out: two corridors and its own stairs.
+    """The Main Staircase has two ways out: one corridor and its own stairs.
 
-    Block all three and it is stranded, which is the point: a place is only
+    Block both and it is stranded, which is the point: a place is only
     unreachable once every edge touching it is closed.
+
+    The edges are read off the graph rather than named here. Naming them is
+    what broke this test last time - it listed a corridor that was later
+    deleted from the survey, so it failed for a reason that had nothing to do
+    with blocking.
     """
-    cut_off_graph = graph_with_blocked_edges(
-        {"Hive_B5_001", "Hive_B5_004", "Hive_Stairs_B"}
-    )
+    touching = {
+        edge.id
+        for edge in graph.edges
+        if "Hive_B5_B" in (edge.from_id, edge.to_id)
+    }
+    assert len(touching) >= 2, "the staircase should have more than one way out"
+
+    cut_off_graph = graph_with_blocked_edges(touching)
 
     assert cut_off_graph.neighbours("Hive_B5_B") == []
     with pytest.raises(NoRouteFoundError):

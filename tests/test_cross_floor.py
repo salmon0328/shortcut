@@ -51,31 +51,18 @@ def _no_stairs(edge) -> bool:
 # --------------------------------------------------------------------------
 
 
-#: Places on B4 that genuinely cannot be reached from B5 right now, because
-#: the walkway out to the South Spine is broken in the middle. The drawing
-#: has a chain - Walkway D -6s- A -7s- B -7s- C -17s- Canteen B - and the
-#: survey holds only A-B and C-Canteen B, so D-A and B-C are missing and the
-#: whole SS side hangs off nothing.
-#:
-#: Written down rather than routed around. Both missing links were dropped
-#: during a graduation, and the drawing is genuinely unclear about them:
-#: Walkway D is drawn twice, once on each building's plan, which is why the
-#: importer refused to place it at all. Somebody who has walked it has to say
-#: which end is which - and until they do, this list is what stops the gap
-#: being quietly forgotten.
-CUT_OFF_FROM_B5 = {
-    "Hive_SS_Walkway_A",
-    "Hive_SS_Walkway_B",
-    "Hive_SS_Walkway_C",
-    "SS_Canteen_A",
-    "SS_Canteen_B",
-}
-
-
 def test_every_place_on_b4_can_be_reached_from_every_place_on_b5(
     graph: CampusGraph,
 ) -> None:
-    """A floor reachable only in places is worse than one nobody surveyed."""
+    """A floor reachable only in places is worse than one nobody surveyed.
+
+    This test used to carry a list of five places it excused - the walkway out
+    to the South Spine was broken in the middle, missing ``Walkway D-A`` and
+    ``Walkway B-C``, so the whole SS side hung off nothing. The list said it
+    had to be deleted by whoever mended the walkway rather than left to rot.
+    Both links are in the survey now, so it is deleted: every place on B4 is
+    reachable from every place on B5, with nothing excused.
+    """
     b5, b4 = _floor(graph, "B5"), _floor(graph, "B4")
     assert b5 and b4
 
@@ -86,10 +73,7 @@ def test_every_place_on_b4_can_be_reached_from_every_place_on_b5(
         if find_route_or_none(graph, start, end) is None
     }
 
-    # Exactly the known gap, no more and no less. A new one shows up here as
-    # a failure, and mending the walkway does too - which is the point: this
-    # has to be deleted by whoever fixes it, not left to rot.
-    assert unreachable == CUT_OFF_FROM_B5
+    assert unreachable == set()
 
 
 def test_both_floors_are_actually_in_the_survey(graph: CampusGraph) -> None:
