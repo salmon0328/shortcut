@@ -6,6 +6,7 @@
 
 import { submitReport, uploadReportPhoto } from "./api.js";
 import { edgesTouching, nodeName, otherEnd } from "./data.js";
+import { hasRoute } from "./plan.js";
 import { createSearchBox } from "./searchBox.js";
 
 const form = document.querySelector("#report-form");
@@ -21,6 +22,31 @@ const photoImage = document.querySelector("#report-photo-image");
 const photoRemove = document.querySelector("#report-photo-remove");
 const submitButton = document.querySelector("#report-submit");
 const statusMessage = document.querySelector("#report-status");
+
+// The thank-you card that replaces the form once a report is in.
+const doneCard = document.querySelector("#report-done");
+const backToWalkButton = document.querySelector("#report-back-to-walk");
+const doneButton = document.querySelector("#report-done-button");
+const anotherButton = document.querySelector("#report-another");
+
+/** Ask main.js to show another screen, without importing it. */
+function navigate(view) {
+  document.dispatchEvent(new CustomEvent("shortcut:navigate", { detail: view }));
+}
+
+function showDone() {
+  form.hidden = true;
+  doneCard.hidden = false;
+  // Somebody who reported mid-walk wants to carry on walking.
+  backToWalkButton.hidden = !hasRoute();
+}
+
+backToWalkButton.addEventListener("click", () => navigate("steps"));
+doneButton.addEventListener("click", () => navigate("plan"));
+anotherButton.addEventListener("click", () => {
+  resetForm();
+  placeInput.focus();
+});
 
 function showStatus(text, kind) {
   statusMessage.textContent = text;
@@ -127,6 +153,8 @@ export function resetForm() {
   whereField.hidden = true;
   clearPhoto();
   hideStatus();
+  form.hidden = false;
+  doneCard.hidden = true;
 }
 
 form.addEventListener("submit", async (event) => {
@@ -169,10 +197,7 @@ form.addEventListener("submit", async (event) => {
       photo_id: photoId,
     });
     resetForm();
-    showStatus(
-      "Thanks. Your report is waiting to be reviewed; the map has not changed yet.",
-      "success"
-    );
+    showDone();
   } catch (error) {
     showStatus(error.message, "error");
   } finally {

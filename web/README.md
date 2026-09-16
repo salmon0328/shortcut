@@ -23,6 +23,8 @@ who has never seen this project.
 | `src/api.js` | every call to the backend, in one place |
 | `src/data.js` | the places and links the browser keeps in memory |
 | `src/searchBox.js` | the type-ahead used by every place picker |
+| `src/recent.js` | places this browser has routed between before |
+| `src/theme.js` | the light / dark / follow-device switch |
 | `src/plan.js` | a route, walked step by step |
 | `src/report.js` | the "what's happening here?" form, including its photo |
 | `src/mapView.js` | the floorplan panel drawn beside a route |
@@ -31,12 +33,22 @@ who has never seen this project.
 | `src/importReview.js` | reviewing what was read out of an uploaded PDF |
 | `src/admin.js` | the reported-problem queue, and the Verifier's working |
 | `src/pending.js` | changes sitting in the overrides file, not yet surveyed |
-| `src/style.css` | every style, with the design tokens at the top |
+| `src/style.css` | every style, with the design tokens (light and dark) at the top |
 
-## Two conventions worth knowing
+## Conventions worth knowing
 
 **The API base URL lives only in `api.js`.** Nothing else builds a URL, so
 pointing the front end at a deployed backend is a one-line change.
+
+**Colours are tokens, never literals.** Every colour is a variable on `:root`,
+redefined for dark mode just below it, so a new rule that writes `#fff` is a
+rule that breaks in the dark. Icons come from the one `<svg>` sprite at the top
+of `index.html` and draw in `currentColor`.
+
+**What the browser remembers stays in the browser.** `localStorage` holds the
+theme (`shortcut-theme`), whether the splash has been seen
+(`shortcut-seen-splash`) and recent places (`shortcut-recent`). Every read is
+guarded, so a private window just starts fresh.
 
 **Nothing here decides anything about routing.** The browser asks for a route
 and draws what comes back; it never scores, sorts or filters. Every rule about

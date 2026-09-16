@@ -20,6 +20,7 @@ import {
   stopPlanLoading,
 } from "./plan.js";
 import { prefillFromStep, resetForm } from "./report.js";
+import { initThemeToggle } from "./theme.js";
 
 // One screen per section, in the order the wireframe walks them: splash,
 // plan, steps, report; admin sits off to the side behind its switch.
@@ -34,14 +35,51 @@ const views = {
 const startButton = document.querySelector("#start-button");
 const startWalkingButton = document.querySelector("#start-walking");
 const finishButton = document.querySelector("#finish-button");
-const adminToggle = document.querySelector("#admin-toggle");
+const endButton = document.querySelector("#end-button");
+const adminButton = document.querySelector("#admin-button");
+const tabbar = document.querySelector("#tabbar");
 const reportProblemButtons = document.querySelectorAll("[data-report-problem]");
+
+// Which screen is showing, so the Report tab knows whether a walk is under way.
+let currentView = "splash";
+
+// Remembered so the splash greets a first visit only. Storage can be missing
+// or throw; then the splash simply shows every time, as it always did.
+const SPLASH_KEY = "shortcut-seen-splash";
+
+function splashSeen() {
+  try {
+    return localStorage.getItem(SPLASH_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function markSplashSeen() {
+  try {
+    localStorage.setItem(SPLASH_KEY, "1");
+  } catch {
+    // Shown again next time, which is harmless.
+  }
+}
 
 /** Show one screen and hide the rest. */
 function showView(name) {
+  currentView = name;
   for (const [key, element] of Object.entries(views)) {
     element.hidden = key !== name;
   }
+
+  // The tab bar is for the student's three screens only.
+  tabbar.hidden = name === "splash" || name === "admin";
+  for (const tab of tabbar.querySelectorAll("[data-nav]")) {
+    if (tab.dataset.nav === name) {
+      tab.setAttribute("aria-current", "page");
+    } else {
+      tab.removeAttribute("aria-current");
+    }
+  }
+
   window.scrollTo(0, 0);
 }
 
@@ -49,7 +87,10 @@ function showView(name) {
 // Moving between screens
 // --------------------------------------------------------------------------
 
-startButton.addEventListener("click", () => showView("plan"));
+startButton.addEventListener("click", () => {
+  markSplashSeen();
+  showView("plan");
+});
 
 startWalkingButton.addEventListener("click", () => showView("steps"));
 
@@ -60,21 +101,41 @@ finishButton.addEventListener("click", () => {
   showView("plan");
 });
 
+// Ending part-way through throws the walk away, so it asks first. The Plan
+// tab is the way to look back at the route without ending anything.
+endButton.addEventListener("click", () => {
+  if (finishButton.hidden && !window.confirm("End navigation?")) return;
+  resetPlan();
+  showView("plan");
+});
+
 for (const button of document.querySelectorAll("[data-back-to-plan]")) {
-  button.addEventListener("click", () => {
-    adminToggle.checked = false;
-    showView("plan");
+  button.addEventListener("click", () => showView("plan"));
+}
+
+// Called by other modules (the report's "Done" buttons) to move on.
+document.addEventListener("shortcut:navigate", (event) => {
+  showView(event.detail);
+});
+
+// Plan and Walk tabs. Report is handled with the other report buttons below.
+for (const tab of tabbar.querySelectorAll("[data-nav]:not([data-report-problem])")) {
+  tab.addEventListener("click", () => {
+    if (!tab.disabled) showView(tab.dataset.nav);
   });
 }
 
-// One on the plan screen, one on the steps screen. Both open the same form;
-// only whether it comes pre-filled differs.
+// One on the steps screen, and the Report tab. Both open the same form; only
+// whether it comes pre-filled differs.
 for (const button of reportProblemButtons) {
   button.addEventListener("click", () => {
-    const step = button.closest("#steps-view") ? currentStep() : null;
+    // Already on the form: the tab does nothing, so a half-written report is
+    // not wiped by a stray tap.
+    if (currentView === "report") return;
+    const step = currentView === "steps" ? currentStep() : null;
     // Reporting from a step already knows which corridor is meant, so the
     // form opens pointed at it rather than making the user find it again.
-    // From the plan screen nothing is being walked, so it opens blank.
+    // From anywhere else nothing is being walked, so it opens blank.
     if (step) {
       prefillFromStep(step);
     } else {
@@ -84,17 +145,15 @@ for (const button of reportProblemButtons) {
   });
 }
 
-// Admin mode is only a switch in this browser. It does not protect anything:
+// Admin mode is only a button in this browser. It does not protect anything:
 // the review endpoints are open, which is fine while this runs locally and is
 // the first thing to change before anyone else can reach it.
-adminToggle.addEventListener("change", () => {
-  if (adminToggle.checked) {
-    showView("admin");
-    showAdminTab("reports");
-  } else {
-    showView("plan");
-  }
+adminButton.addEventListener("click", () => {
+  showView("admin");
+  showAdminTab("reports");
 });
+
+initThemeToggle(document.querySelector("#theme-button"));
 
 // --------------------------------------------------------------------------
 // The panels of admin mode
@@ -194,5 +253,5 @@ async function start() {
   }
 }
 
-showView("splash");
+showView(splashSeen() ? "plan" : "splash");
 start();

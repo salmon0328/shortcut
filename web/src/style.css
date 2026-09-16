@@ -5,27 +5,143 @@
    page rather than stretching, so the layout is the same on both. */
 
 :root {
+  color-scheme: light;
+
   --ink: #171a2b;
   --muted: #5f6577;
   --line: #e3e6ee;
   --card: #ffffff;
   --page: #f5f6fa;
+  --page-outer: #e9ebf2;
+  --hover: #e8ecf1;
   --brand: #1d2bb5;
   --accent: #2f4de0;
+  --accent-hover: #2540c4;
   --accent-soft: #e9edfd;
+  --on-accent: #ffffff;
+  --focus: #2f4de0;
   --yes: #1a7f4b;
+  --yes-hover: #14603a;
+  --yes-ink: #14603a;
   --yes-soft: #e7f5ec;
+  --yes-line: #b8e0c8;
   --warn: #8a6100;
   --warn-soft: #fdf3e0;
   --danger: #c62828;
+  --danger-hover: #a92020;
   --danger-soft: #fdeaea;
+  --danger-soft-hover: #fbdcdc;
   --danger-line: #f3c9c9;
+  --glass: rgb(255 255 255 / 85%);
+  --clear-hover: #d5d9e4;
+  --icon-faint: #b3b8c8;
+  --dash: #c9cedb;
+  --map-bg: #eef0f6;
+  --map-block: #dfe2ec;
+  --map-dot: #d3d7e4;
+  --paper: #ffffff;
+  --plan-filter: none;
   --radius: 0.75rem;
   --shadow: 0 10px 30px rgb(20 25 60 / 10%);
+  --shadow-soft: 0 -8px 24px rgb(20 25 60 / 8%);
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --tabbar-h: 4rem;
+}
+
+/* Dark values, written twice: once for "follow the device", once for an
+   explicit choice. data-theme="light" opts out of the first. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --ink: #e8eaf3;
+    --muted: #9aa1b8;
+    --line: #2a3048;
+    --card: #181c2e;
+    --page: #11152a;
+    --page-outer: #0a0d18;
+    --hover: #222843;
+    --brand: #a9b6ff;
+    --accent: #6d83ff;
+    --accent-hover: #8294ff;
+    --accent-soft: rgb(109 131 255 / 18%);
+    --on-accent: #0b0e1c;
+    --focus: #8fa0ff;
+    --yes: #3fbf7f;
+    --yes-hover: #5ccf94;
+    --yes-ink: #6fd9a2;
+    --yes-soft: rgb(63 191 127 / 15%);
+    --yes-line: rgb(63 191 127 / 35%);
+    --warn: #f0b74a;
+    --warn-soft: rgb(240 183 74 / 14%);
+    --danger: #ff6b6b;
+    --danger-hover: #ff8585;
+    --danger-soft: rgb(255 107 107 / 13%);
+    --danger-soft-hover: rgb(255 107 107 / 22%);
+    --danger-line: rgb(255 107 107 / 35%);
+    --glass: rgb(24 28 46 / 80%);
+    --clear-hover: #353c5a;
+    --icon-faint: #4b5372;
+    --dash: #3a4262;
+    --map-bg: #141830;
+    --map-block: #1d2240;
+    --map-dot: #262c4c;
+    --paper: #d9dce6;
+    --plan-filter: brightness(0.85);
+    --shadow: 0 10px 30px rgb(0 0 0 / 45%);
+    --shadow-soft: 0 -8px 24px rgb(0 0 0 / 35%);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --ink: #e8eaf3;
+  --muted: #9aa1b8;
+  --line: #2a3048;
+  --card: #181c2e;
+  --page: #11152a;
+  --page-outer: #0a0d18;
+  --hover: #222843;
+  --brand: #a9b6ff;
+  --accent: #6d83ff;
+  --accent-hover: #8294ff;
+  --accent-soft: rgb(109 131 255 / 18%);
+  --on-accent: #0b0e1c;
+  --focus: #8fa0ff;
+  --yes: #3fbf7f;
+  --yes-hover: #5ccf94;
+  --yes-ink: #6fd9a2;
+  --yes-soft: rgb(63 191 127 / 15%);
+  --yes-line: rgb(63 191 127 / 35%);
+  --warn: #f0b74a;
+  --warn-soft: rgb(240 183 74 / 14%);
+  --danger: #ff6b6b;
+  --danger-hover: #ff8585;
+  --danger-soft: rgb(255 107 107 / 13%);
+  --danger-soft-hover: rgb(255 107 107 / 22%);
+  --danger-line: rgb(255 107 107 / 35%);
+  --glass: rgb(24 28 46 / 80%);
+  --clear-hover: #353c5a;
+  --icon-faint: #4b5372;
+  --dash: #3a4262;
+  --map-bg: #141830;
+  --map-block: #1d2240;
+  --map-dot: #262c4c;
+  --paper: #d9dce6;
+  --plan-filter: brightness(0.85);
+  --shadow: 0 10px 30px rgb(0 0 0 / 45%);
+  --shadow-soft: 0 -8px 24px rgb(0 0 0 / 35%);
 }
 
 * {
   box-sizing: border-box;
+}
+
+/* Several components set their own display (flex buttons, the photo
+   preview), which would otherwise beat the hidden attribute. */
+[hidden] {
+  display: none !important;
 }
 
 html,
@@ -35,10 +151,11 @@ body {
 }
 
 body {
-  background: #e9ebf2;
+  background: var(--page-outer);
   color: var(--ink);
   font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.2s;
 }
 
 .app {
@@ -47,7 +164,9 @@ body {
   min-height: 100dvh;
   margin: 0 auto;
   background: var(--page);
-  overflow: hidden;
+  /* clip, not hidden: hidden would make this the scroll container and stop
+     the sticky step header and action bar from sticking. */
+  overflow: clip;
 }
 
 @media (min-width: 40rem) {
@@ -144,12 +263,13 @@ body {
   width: 4.5rem;
   height: 4.5rem;
   margin-bottom: 1rem;
-  color: #fff;
+  color: var(--on-accent);
   font-size: 2.5rem;
   font-weight: 800;
   background: var(--accent);
   border-radius: 1.25rem;
   box-shadow: 0 8px 20px rgb(47 77 224 / 30%);
+  animation: pop-in 0.5s var(--ease) both;
 }
 
 .splash-title {
@@ -185,7 +305,7 @@ button + button {
 }
 
 button:hover:not(:disabled) {
-  background: #e8ecf1;
+  background: var(--hover);
 }
 
 button:disabled {
@@ -194,13 +314,13 @@ button:disabled {
 }
 
 button.primary {
-  color: #fff;
+  color: var(--on-accent);
   background: var(--accent);
   border-color: var(--accent);
 }
 
 button.primary:hover:not(:disabled) {
-  background: #2540c4;
+  background: var(--accent-hover);
 }
 
 button.primary.success {
@@ -209,7 +329,7 @@ button.primary.success {
 }
 
 button.primary.success:hover:not(:disabled) {
-  background: #14603a;
+  background: var(--yes-hover);
 }
 
 button.secondary {
@@ -225,13 +345,13 @@ button.small {
 }
 
 button.danger {
-  color: #fff;
+  color: var(--on-accent);
   background: var(--danger);
   border-color: var(--danger);
 }
 
 button.danger:hover:not(:disabled) {
-  background: #a92020;
+  background: var(--danger-hover);
 }
 
 button.danger-outline {
@@ -241,17 +361,17 @@ button.danger-outline {
 }
 
 button.danger-outline:hover:not(:disabled) {
-  background: #fbdcdc;
+  background: var(--danger-soft-hover);
 }
 
 button.approve {
-  color: #fff;
+  color: var(--on-accent);
   background: var(--yes);
   border-color: var(--yes);
 }
 
 button.approve:hover:not(:disabled) {
-  background: #14603a;
+  background: var(--yes-hover);
 }
 
 /* ==========================================================================
@@ -290,7 +410,7 @@ textarea {
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus);
   outline-offset: 1px;
 }
 
@@ -305,7 +425,7 @@ textarea:focus-visible {
   min-height: 16rem;
   margin-bottom: 0.75rem;
   padding: 0.5rem;
-  background: #eef0f6;
+  background: var(--map-bg);
   border: 1px solid var(--line);
   border-radius: var(--radius);
 }
@@ -616,7 +736,7 @@ textarea:focus-visible {
 
 .clear-button:hover:not(:disabled) {
   color: var(--ink);
-  background: #d5d9e4;
+  background: var(--clear-hover);
 }
 
 .suggestions {
@@ -704,7 +824,7 @@ textarea:focus-visible {
 }
 
 .chip input:checked + span {
-  color: #fff;
+  color: var(--on-accent);
   background: var(--accent);
   border-color: var(--accent);
 }
@@ -793,9 +913,9 @@ textarea:focus-visible {
 }
 
 .status.success {
-  color: #14603a;
+  color: var(--yes-ink);
   background: var(--yes-soft);
-  border: 1px solid #b8e0c8;
+  border: 1px solid var(--yes-line);
 }
 
 /* ==========================================================================
@@ -823,13 +943,13 @@ textarea:focus-visible {
   justify-content: center;
   overflow: hidden;
   padding: 3.5rem 1rem 1rem;
-  background-color: #eef0f6;
+  background-color: var(--map-bg);
   background-image:
-    linear-gradient(#dfe2ec, #dfe2ec),
-    linear-gradient(#dfe2ec, #dfe2ec),
-    linear-gradient(#dfe2ec, #dfe2ec),
-    linear-gradient(#dfe2ec, #dfe2ec),
-    radial-gradient(circle at 1px 1px, #d3d7e4 1px, transparent 0);
+    linear-gradient(var(--map-block), var(--map-block)),
+    linear-gradient(var(--map-block), var(--map-block)),
+    linear-gradient(var(--map-block), var(--map-block)),
+    linear-gradient(var(--map-block), var(--map-block)),
+    radial-gradient(circle at 1px 1px, var(--map-dot) 1px, transparent 0);
   background-size:
     5.5rem 8rem,
     3.5rem 3.5rem,
@@ -854,7 +974,7 @@ textarea:focus-visible {
   max-width: 18rem;
   padding: 0.5rem 0.9rem;
   text-align: center;
-  background: rgb(255 255 255 / 85%);
+  background: var(--glass);
   border-radius: 999px;
   backdrop-filter: blur(4px);
 }
@@ -899,7 +1019,7 @@ textarea:focus-visible {
 
 .map-pin {
   fill: var(--accent);
-  stroke: #fff;
+  stroke: var(--paper);
   stroke-width: 2;
   vector-effect: non-scaling-stroke;
 }
@@ -940,7 +1060,7 @@ textarea:focus-visible {
 }
 
 .floor-tab.is-active {
-  color: #fff;
+  color: var(--on-accent);
   background: var(--accent);
   border-color: var(--accent);
 }
@@ -957,28 +1077,6 @@ textarea:focus-visible {
   padding: 0.75rem 1rem;
 }
 
-.wordmark {
-  padding: 0.25rem 0.75rem;
-  font-weight: 800;
-  color: var(--brand);
-  background: rgb(255 255 255 / 85%);
-  border-radius: 999px;
-}
-
-.admin-switch {
-  display: flex;
-  gap: 0.375rem;
-  align-items: center;
-  margin: 0;
-  padding: 0.25rem 0.75rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--muted);
-  background: rgb(255 255 255 / 85%);
-  border-radius: 999px;
-  cursor: pointer;
-}
-
 .sheet {
   position: relative;
   z-index: 1;
@@ -986,11 +1084,7 @@ textarea:focus-visible {
   padding: 0.75rem 1rem 2.5rem;
   background: var(--card);
   border-radius: 1.25rem 1.25rem 0 0;
-  box-shadow: 0 -8px 24px rgb(20 25 60 / 8%);
-}
-
-.sheet-report {
-  margin-top: 1rem;
+  box-shadow: var(--shadow-soft);
 }
 
 .sheet-handle {
@@ -1180,10 +1274,6 @@ textarea:focus-visible {
   font-weight: 600;
 }
 
-.step-instruction::before {
-  content: counter(step) ". ";
-  color: var(--muted);
-}
 
 /* The step being walked right now: brought forward, and the only one showing
    its picture, its full description and the Back button. */
@@ -1198,6 +1288,9 @@ textarea:focus-visible {
 
 .step.is-done .step-instruction {
   font-weight: 400;
+}
+
+.step.is-done .step-text {
   text-decoration: line-through;
 }
 
@@ -1218,7 +1311,7 @@ textarea:focus-visible {
 .step-photo-empty {
   display: grid;
   place-items: center;
-  color: #b3b8c8;
+  color: var(--icon-faint);
   background: var(--page);
   border: 1px dashed var(--line);
 }
@@ -1235,11 +1328,16 @@ textarea:focus-visible {
 }
 
 .step-condition {
-  margin: 0.375rem 0 0;
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  margin: 0.5rem 0 0;
+  padding: 0.45rem 0.65rem;
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--warn);
-  text-transform: capitalize;
+  background: var(--warn-soft);
+  border-radius: 0.5rem;
 }
 
 .step .step-back {
@@ -1251,8 +1349,25 @@ textarea:focus-visible {
   font-weight: 600;
 }
 
+/* Pinned to the bottom of the screen, just above the tab bar. */
 .steps-actions {
-  margin-top: 1rem;
+  position: sticky;
+  bottom: var(--tabbar-h);
+  z-index: 3;
+  display: flex;
+  gap: 0.5rem;
+  margin: 1rem -1rem 0;
+  padding: 0.75rem 1rem;
+  background: var(--page);
+  border-top: 1px solid var(--line);
+}
+
+.steps-actions button {
+  margin: 0;
+}
+
+.steps-actions .primary {
+  flex: 1;
 }
 
 /* ==========================================================================
@@ -1283,7 +1398,7 @@ textarea:focus-visible {
   color: var(--muted);
   font-size: 0.85rem;
   background: var(--page);
-  border: 1px dashed #c9cedb;
+  border: 1px dashed var(--dash);
   border-radius: var(--radius);
   cursor: pointer;
 }
@@ -1300,7 +1415,7 @@ textarea:focus-visible {
 }
 
 .photo-box-icon {
-  color: #b3b8c8;
+  color: var(--icon-faint);
 }
 
 .photo-box:hover .photo-box-icon {
@@ -1337,7 +1452,11 @@ textarea:focus-visible {
 }
 
 .condition span {
-  display: block;
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+  justify-content: center;
+  min-height: 3rem;
   padding: 0.6rem;
   text-align: center;
   font-size: 0.9rem;
@@ -1350,8 +1469,15 @@ textarea:focus-visible {
 .condition input:checked + span {
   color: var(--danger);
   background: var(--danger-soft);
-  border-color: #e88;
+  border-color: var(--danger-line);
   font-weight: 600;
+  animation: press 0.2s var(--ease);
+}
+
+.condition.crowded input:checked + span {
+  color: var(--warn);
+  background: var(--warn-soft);
+  border-color: var(--warn);
 }
 
 /* ==========================================================================
@@ -1428,7 +1554,7 @@ textarea:focus-visible {
 }
 
 .tab.is-active {
-  color: #fff;
+  color: var(--on-accent);
   background: var(--accent);
   border-color: var(--accent);
 }
@@ -1551,7 +1677,7 @@ textarea:focus-visible {
 .report-thumb-empty {
   display: grid;
   place-items: center;
-  color: #b3b8c8;
+  color: var(--icon-faint);
   background: var(--page);
   border: 1px dashed var(--line);
 }
@@ -1856,4 +1982,768 @@ code {
   font-size: 0.8rem;
   line-height: 1.7;
   white-space: pre;
+}
+
+/* ==========================================================================
+   Icons, and the controls built from them
+   ========================================================================== */
+
+.icon-sprite {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+/* Every icon is a stroke drawing from the sprite in index.html, so it takes
+   the colour of whatever text it sits beside. */
+.icon {
+  flex-shrink: 0;
+  width: 1.15em;
+  height: 1.15em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vertical-align: -0.2em;
+}
+
+.photo-box-icon,
+.step-photo-empty .icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  stroke-width: 1.4;
+}
+
+/* Buttons that carry an icon and a word keep the two together. */
+button.primary,
+button.secondary {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: center;
+}
+
+button {
+  min-height: 2.75rem;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s,
+    color 0.15s,
+    transform 0.1s;
+}
+
+button.small {
+  min-height: 0;
+}
+
+button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+button:focus-visible,
+.tabbar-item:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* A round button holding one icon, like the ones floating over the map. */
+.icon-button {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 2.5rem;
+  height: 2.5rem;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  color: var(--ink);
+  background: var(--glass);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 8%);
+  backdrop-filter: blur(8px);
+}
+
+.icon-button + .icon-button {
+  margin-top: 0;
+}
+
+.icon-button .icon {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.icon-button.danger-icon {
+  width: 2.75rem;
+  height: 2.75rem;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-color: var(--danger-line);
+  box-shadow: none;
+}
+
+/* A button that reads as a link: for the quieter choice beside a big one. */
+.text-button {
+  width: auto;
+  min-height: 0;
+  padding: 0.25rem 0;
+  color: var(--accent);
+  background: none;
+  border: none;
+  font-size: 0.85rem;
+}
+
+.text-button:hover:not(:disabled) {
+  background: none;
+  text-decoration: underline;
+}
+
+/* The spinner that stands in for "Get route" while a route is found. */
+button.is-loading::before {
+  content: "";
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 999px;
+  animation: spin 0.7s linear infinite;
+}
+
+/* ==========================================================================
+   Top bar
+   ========================================================================== */
+
+.wordmark {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  padding: 0.3rem 0.8rem 0.3rem 0.3rem;
+  font-weight: 800;
+  color: var(--brand);
+  background: var(--glass);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  backdrop-filter: blur(8px);
+}
+
+.wordmark-logo {
+  display: grid;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  font-size: 0.9rem;
+  color: var(--on-accent);
+  background: var(--accent);
+  border-radius: 0.5rem;
+}
+
+.topbar-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* ==========================================================================
+   Plan: both ends, recent places, chips
+   ========================================================================== */
+
+.ends {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.875rem;
+}
+
+.ends-fields {
+  flex: 1;
+  min-width: 0;
+}
+
+/* A dot per end and a dotted line between them, in the colours the route
+   summary and the map pins already use. */
+.end {
+  position: relative;
+  padding-left: 1.5rem;
+}
+
+.end::before {
+  content: "";
+  position: absolute;
+  left: 0.3rem;
+  bottom: 1.05rem;
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 999px;
+  box-shadow: 0 0 0 3px var(--card);
+}
+
+.end.from::before {
+  background: var(--yes);
+}
+
+.end.to::before {
+  background: var(--danger);
+}
+
+.end.from::after {
+  content: "";
+  position: absolute;
+  left: 0.6rem;
+  top: calc(100% - 0.9rem);
+  height: 3.7rem;
+  border-left: 2px dotted var(--dash);
+}
+
+.end.to {
+  margin-bottom: 0;
+}
+
+.swap-button {
+  margin-top: 1.25rem;
+  background: var(--page);
+  box-shadow: none;
+}
+
+.swap-button.is-spinning .icon {
+  animation: flip 0.35s var(--ease);
+}
+
+.recent {
+  margin-bottom: 0.875rem;
+}
+
+.recent[hidden] {
+  display: none;
+}
+
+.recent-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.recent-head .text-button {
+  font-size: 0.8rem;
+}
+
+/* One row that scrolls sideways, so a long list never pushes the form down. */
+.recent-list {
+  display: flex;
+  gap: 0.4rem;
+  margin: 0.3rem -1rem 0;
+  padding: 0.1rem 1rem 0.25rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.recent-chip {
+  display: inline-flex;
+  flex: none;
+  gap: 0.35rem;
+  align-items: center;
+  width: auto;
+  max-width: 14rem;
+  min-height: 2.25rem;
+  margin: 0;
+  padding: 0.35rem 0.8rem;
+  overflow: hidden;
+  font-size: 0.85rem;
+  font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--ink);
+  background: var(--page);
+  border-radius: 999px;
+}
+
+.recent-chip + .recent-chip {
+  margin-top: 0;
+}
+
+.recent-chip .icon {
+  color: var(--muted);
+}
+
+.chip-row {
+  display: flex;
+  gap: 0.4rem;
+  margin: 0 -1rem;
+  padding: 0.1rem 1rem 0.25rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.chip-row .chip {
+  flex: none;
+  margin: 0;
+}
+
+.chip span {
+  display: inline-flex;
+  gap: 0.35rem;
+  align-items: center;
+  padding: 0.5rem 0.95rem;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
+}
+
+/* --- the route summary --- */
+
+.summary {
+  animation: rise 0.3s var(--ease);
+}
+
+.summary-head {
+  align-items: center;
+}
+
+.summary-clock {
+  width: 1.5rem;
+  height: 1.5rem;
+  color: var(--accent);
+}
+
+.summary-time,
+.route-option-numbers,
+.step-meta,
+.tabbar-badge {
+  font-variant-numeric: tabular-nums;
+}
+
+.badge {
+  display: inline-flex;
+  gap: 0.3rem;
+  align-items: center;
+  padding: 0.25rem 0.65rem;
+}
+
+.badge.info {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.options-toggle {
+  display: block;
+  margin: 0.5rem auto 0;
+}
+
+/* ==========================================================================
+   Map, in both themes
+   ========================================================================== */
+
+/* A floorplan is a white drawing; inverting it would garble it, so in the
+   dark it is only dimmed, which keeps the route line readable on top. */
+.map-svg image,
+.floor-map-svg image {
+  filter: var(--plan-filter);
+}
+
+.map-floors {
+  gap: 0.35rem;
+}
+
+.floor-tab {
+  min-height: 2rem;
+  background: var(--glass);
+  border-radius: 999px;
+  backdrop-filter: blur(8px);
+}
+
+/* ==========================================================================
+   Steps
+   ========================================================================== */
+
+.sticky-head {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  margin: -1rem -1rem 1rem;
+  padding: 1rem 1rem 0.75rem;
+  background: var(--page);
+}
+
+.head-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.end-button {
+  width: auto;
+  min-height: 2.25rem;
+  padding: 0.35rem 1rem;
+  font-size: 0.85rem;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-color: var(--danger-line);
+  border-radius: 999px;
+}
+
+.end-button:hover:not(:disabled) {
+  background: var(--danger-soft-hover);
+}
+
+.progress {
+  height: 0.3rem;
+  margin-top: 0.75rem;
+  overflow: hidden;
+  background: var(--line);
+  border-radius: 999px;
+}
+
+.progress-fill {
+  width: 0;
+  height: 100%;
+  background: var(--yes);
+  border-radius: inherit;
+  transition: width 0.35s var(--ease);
+}
+
+.step {
+  transition:
+    border-color 0.2s,
+    background-color 0.2s,
+    box-shadow 0.2s,
+    opacity 0.2s;
+}
+
+.step-instruction {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+/* The step's number, or the icon of how it is walked. */
+.step-marker {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--muted);
+  background: var(--page);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.step.is-current .step-marker {
+  color: var(--on-accent);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.step.is-done .step-marker {
+  color: var(--yes);
+  background: var(--yes-soft);
+  border-color: transparent;
+}
+
+.step-marker .icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+.step-arrived {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.arrived-mark {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  color: var(--muted);
+  background: var(--page);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.arrived-mark .icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+/* Reaching the end: the mark fills in green and the tick draws itself. */
+.step-arrived.is-reached {
+  flex-wrap: wrap;
+  border-color: var(--yes);
+  box-shadow: 0 0 0 3px var(--yes-soft);
+}
+
+.step-arrived.is-reached .arrived-mark {
+  width: 2.5rem;
+  height: 2.5rem;
+  color: var(--on-accent);
+  background: var(--yes);
+  border-color: var(--yes);
+  animation: pop-in 0.4s var(--ease);
+}
+
+.step-arrived.is-reached .arrived-mark .icon {
+  width: 1.4rem;
+  height: 1.4rem;
+  stroke-width: 2.5;
+  stroke-dasharray: 24;
+  animation: draw 0.45s 0.15s var(--ease) both;
+}
+
+.step-arrived.is-reached .step-back {
+  margin-left: auto;
+}
+
+/* ==========================================================================
+   Report: the thank-you card
+   ========================================================================== */
+
+#report-form[hidden],
+.done-card[hidden] {
+  display: none;
+}
+
+.done-card {
+  padding: 2rem 1.25rem 1.25rem;
+  text-align: center;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  animation: rise 0.3s var(--ease);
+}
+
+.done-card h3 {
+  margin: 0;
+}
+
+.done-card .hint {
+  margin-bottom: 1.25rem;
+}
+
+.done-card .text-button {
+  margin-top: 0.75rem;
+}
+
+.done-mark {
+  display: grid;
+  place-items: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  margin: 0 auto 1rem;
+  color: var(--on-accent);
+  background: var(--yes);
+  border-radius: 999px;
+  animation: pop-in 0.4s var(--ease);
+}
+
+.done-mark .icon {
+  width: 1.8rem;
+  height: 1.8rem;
+  stroke-width: 2.5;
+  stroke-dasharray: 24;
+  animation: draw 0.45s 0.15s var(--ease) both;
+}
+
+/* ==========================================================================
+   Tab bar
+   ========================================================================== */
+
+/* Room at the bottom of every screen, so nothing sits under the bar. */
+.app:has(.tabbar:not([hidden])) .screen {
+  padding-bottom: calc(var(--tabbar-h) + 1.5rem);
+}
+
+.app:has(.tabbar:not([hidden])) #steps-view {
+  padding-bottom: var(--tabbar-h);
+}
+
+/* On the plan screen the white sheet itself runs down behind the bar. */
+.app:has(.tabbar:not([hidden])) .plan {
+  padding-bottom: 0;
+}
+
+.app:has(.tabbar:not([hidden])) .sheet {
+  padding-bottom: calc(var(--tabbar-h) + 1.5rem);
+}
+
+/* Anything scrolled to (a focused field, the route summary) stops clear of
+   the bar instead of underneath it. */
+html:has(.tabbar:not([hidden])) {
+  scroll-padding-bottom: calc(var(--tabbar-h) + 0.5rem);
+}
+
+.tabbar {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  width: 100%;
+  max-width: 30rem;
+  height: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+  transform: translateX(-50%);
+  background: var(--glass);
+  border-top: 1px solid var(--line);
+  backdrop-filter: blur(12px);
+}
+
+.tabbar[hidden] {
+  display: none;
+}
+
+@media (min-width: 40rem) {
+  .tabbar {
+    bottom: 1rem;
+    border-radius: 0 0 1.5rem 1.5rem;
+  }
+
+  .steps-actions {
+    bottom: calc(var(--tabbar-h) + 1rem);
+  }
+}
+
+.tabbar-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0.4rem 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+  background: none;
+  border: none;
+  border-radius: 0;
+}
+
+.tabbar-item + .tabbar-item {
+  margin-top: 0;
+}
+
+.tabbar-item:hover:not(:disabled) {
+  color: var(--ink);
+  background: none;
+}
+
+.tabbar-item:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.tabbar-item .icon {
+  width: 1.4rem;
+  height: 1.4rem;
+  padding: 0.1rem;
+  box-sizing: content-box;
+  border-radius: 999px;
+  transition: background-color 0.2s;
+}
+
+.tabbar-item[aria-current="page"] {
+  color: var(--accent);
+}
+
+/* A pill behind the active icon, as on most phone tab bars. */
+.tabbar-item[aria-current="page"] .icon {
+  padding: 0.1rem 1rem;
+  background: var(--accent-soft);
+}
+
+.tabbar-badge {
+  position: absolute;
+  top: 0.25rem;
+  left: calc(50% + 0.6rem);
+  padding: 0 0.35rem;
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--on-accent);
+  background: var(--yes);
+  border-radius: 999px;
+}
+
+.tabbar-badge[hidden] {
+  display: none;
+}
+
+/* ==========================================================================
+   Motion
+   ========================================================================== */
+
+/* Each screen settles in rather than snapping. */
+.screen:not([hidden]) {
+  animation: fade-in 0.22s var(--ease);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+
+@keyframes draw {
+  from {
+    stroke-dashoffset: 24;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes flip {
+  from {
+    transform: rotate(-180deg);
+  }
+}
+
+@keyframes press {
+  50% {
+    transform: scale(0.96);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
