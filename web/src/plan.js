@@ -16,6 +16,7 @@ import {
 import { getNodes, nodeLabel, nodeName, placeWhere } from "./data.js";
 import { createSearchBox } from "./searchBox.js";
 import { showEmptyMap, showRouteOnMap } from "./mapView.js";
+import { clearRecent, isRecent, recentPlaces, rememberPlaces } from "./recent.js";
 
 const form = document.querySelector("#route-form");
 const findButton = document.querySelector("#find-button");
@@ -33,10 +34,7 @@ const totalTimeOutput = document.querySelector("#total-time");
 const summaryLine = document.querySelector("#summary-line");
 const summaryFrom = document.querySelector("#summary-from");
 const summaryTo = document.querySelector("#summary-to");
-const stairsBadge = document.querySelector("#badge-stairs");
-const liftBadge = document.querySelector("#badge-lift");
-const shuttleBadge = document.querySelector("#badge-shuttle");
-const shelterBadge = document.querySelector("#badge-shelter");
+const badges = document.querySelector("#badges");
 const totalExtra = document.querySelector("#total-extra");
 const showOptionsButton = document.querySelector("#show-options");
 const optionsList = document.querySelector("#route-options");
@@ -48,6 +46,17 @@ const stepProgress = document.querySelector("#step-progress");
 const backButton = document.querySelector("#back-button");
 const nextButton = document.querySelector("#next-button");
 const finishButton = document.querySelector("#finish-button");
+const progressFill = document.querySelector("#progress-fill");
+
+// The Walk tab, which only leads somewhere once there is a route.
+const walkTab = document.querySelector('#tabbar [data-nav="steps"]');
+const walkBadge = document.querySelector("#walk-badge");
+
+// Swapping ends, and the places routed between before.
+const swapButton = document.querySelector("#swap-button");
+const recentBox = document.querySelector("#recent");
+const recentList = document.querySelector("#recent-list");
+const recentClear = document.querySelector("#recent-clear");
 
 // The plain-language box.
 const ask = document.querySelector("#ask");
@@ -56,13 +65,18 @@ const askButton = document.querySelector("#ask-button");
 const askStatus = document.querySelector("#ask-status");
 const askChoices = document.querySelector("#ask-choices");
 
+// Places used before float to the top of an empty box's list.
 const originBox = createSearchBox(
   document.querySelector("#origin-input"),
-  document.querySelector("#origin-suggestions")
+  document.querySelector("#origin-suggestions"),
+  undefined,
+  { prefer: isRecent }
 );
 const destinationBox = createSearchBox(
   document.querySelector("#destination-input"),
-  document.querySelector("#destination-suggestions")
+  document.querySelector("#destination-suggestions"),
+  undefined,
+  { prefer: isRecent }
 );
 
 // The route on screen, and how far along the user says they are.
@@ -86,12 +100,16 @@ export function showPlanLoading(text) {
   loadingMessage.textContent = text;
   loadingMessage.hidden = false;
   findButton.disabled = true;
+  findButton.classList.add("is-loading");
 }
 
 export function stopPlanLoading() {
   loadingMessage.hidden = true;
   findButton.disabled = false;
+  findButton.classList.remove("is-loading");
   findButton.textContent = "Get route";
+  // The place lists may have just arrived, so the recent row can be drawn.
+  renderRecent();
 }
 
 export function showPlanError(text) {
@@ -123,9 +141,46 @@ function formatMinutes(totalSeconds) {
 /** 55.599999999999994 -> "56 m". Whole metres are enough for a walk. */
 const formatMetres = (metres) => `${Math.round(metres)} m`;
 
-function setBadge(element, isTrue, trueText, falseText) {
-  element.textContent = isTrue ? `✓ ${trueText}` : `✗ ${falseText}`;
-  element.className = isTrue ? "badge yes" : "badge no";
+/** An inline icon from the sprite in index.html. */
+function icon(name) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("class", "icon");
+  svg.setAttribute("aria-hidden", "true");
+  const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+  use.setAttribute("href", `#i-${name}`);
+  svg.appendChild(use);
+  return svg;
+}
+
+/**
+ * Only what is worth saying about the route. A route without a lift or a
+ * shuttle is the ordinary case, so "no lift" is left unsaid; "no stairs" is
+ * news to somebody who cannot climb them, and an exposed stretch is a
+ * warning.
+ */
+function renderBadges(route) {
+  const items = [];
+  if (route.uses_stairs) {
+    items.push(["stairs", "Uses stairs", "info"]);
+  } else {
+    items.push(["check", "No stairs", "yes"]);
+  }
+  if (route.uses_lift) items.push(["lift", "Uses lift", "info"]);
+  if (route.uses_shuttle) items.push(["bus", "Uses shuttle", "info"]);
+  if (route.fully_sheltered) {
+    items.push(["umbrella", "Sheltered", "yes"]);
+  } else {
+    items.push(["umbrella", "Partly exposed", "no"]);
+  }
+
+  badges.replaceChildren(
+    ...items.map(([iconName, text, kind]) => {
+      const badge = document.createElement("li");
+      badge.className = `badge ${kind}`;
+      badge.append(icon(iconName), text);
+      return badge;
+    })
+  );
 }
 
 /** "mostly sheltered", from how much of the walk is under cover. */
@@ -164,13 +219,41 @@ function photoOrPlaceholder(step) {
   const empty = document.createElement("div");
   empty.className = "step-photo-empty";
   empty.setAttribute("aria-hidden", "true");
-  empty.innerHTML =
-    '<svg viewBox="0 0 24 24" width="36" height="36">' +
-    '<rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/>' +
-    '<circle cx="8.5" cy="10" r="1.6" fill="currentColor"/>' +
-    '<path d="M5 17l4.5-4.5 3 3 2.5-2.5L19 17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>' +
-    "</svg>";
+  empty.appendChild(icon("camera"));
   return empty;
+}
+
+/** The mark at the start of a step: a tick once walked, else how you move or its number. */
+function stepMarker(step, index) {
+  const marker = document.createElement("span");
+  marker.className = "step-marker";
+  const kind =
+    index < currentStepIndex
+      ? "check"
+      : step.shuttle
+        ? "bus"
+        : step.lift
+          ? "lift"
+          : step.stairs
+            ? "stairs"
+            : null;
+  if (kind) {
+    marker.classList.add("has-icon");
+    marker.appendChild(icon(kind));
+  } else {
+    marker.textContent = String(index + 1);
+  }
+  return marker;
+}
+
+/** Keep the Walk tab in step with whether there is anything to walk. */
+function syncWalkTab() {
+  walkTab.disabled = currentSteps.length === 0;
+  const walking = currentSteps.length > 0 && currentStepIndex < currentSteps.length;
+  walkBadge.hidden = !walking;
+  walkBadge.textContent = walking
+    ? `${currentStepIndex + 1}/${currentSteps.length}`
+    : "";
 }
 
 function renderSteps() {
@@ -208,7 +291,10 @@ function renderSteps() {
 
     const heading = document.createElement("p");
     heading.className = "step-instruction";
-    heading.textContent = step.instruction;
+    const text = document.createElement("span");
+    text.className = "step-text";
+    text.textContent = step.instruction;
+    heading.append(stepMarker(step, index), text);
     item.appendChild(heading);
 
     // Only the step being walked shows its full description, so the list
@@ -224,7 +310,7 @@ function renderSteps() {
       if (step.condition) {
         const warning = document.createElement("p");
         warning.className = "step-condition";
-        warning.textContent = `Reported as ${step.condition}`;
+        warning.append(icon("alert"), `Reported as ${step.condition}`);
         item.appendChild(warning);
       }
 
@@ -252,10 +338,14 @@ function renderSteps() {
   // underneath somebody clicking down it.
   const done = document.createElement("li");
   done.className = "step step-arrived";
-  done.textContent = "You have arrived.";
+
+  const doneMark = document.createElement("span");
+  doneMark.className = "arrived-mark";
+  doneMark.appendChild(icon("check"));
+  done.append(doneMark, "You have arrived.");
 
   if (arrived) {
-    done.classList.add("is-current");
+    done.classList.add("is-current", "is-reached");
     backButton.className = "secondary small step-back";
     backButton.hidden = false;
     done.appendChild(backButton);
@@ -300,6 +390,18 @@ function renderSteps() {
   // the way out.
   nextButton.hidden = arrived;
   finishButton.hidden = !arrived;
+
+  progressFill.style.width = `${
+    currentSteps.length ? (currentStepIndex / currentSteps.length) * 100 : 100
+  }%`;
+  syncWalkTab();
+
+  // Bring the step being walked into view. Skipped while the steps screen is
+  // hidden (a route has just been found), where it would scroll the plan.
+  const current = stepsList.querySelector(".step.is-current");
+  if (current && !stepsList.closest(".screen").hidden) {
+    current.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
 }
 
 /** Forget the route and the places, back to the blank plan screen. */
@@ -311,10 +413,12 @@ export function resetPlan() {
   lastRequest = null;
   optionsList.replaceChildren();
   optionsList.hidden = true;
-  showOptionsButton.textContent = "View others";
+  showOptionsButton.textContent = "View other routes";
   stepsList.replaceChildren();
   nextButton.hidden = false;
   finishButton.hidden = true;
+  progressFill.style.width = "0%";
+  syncWalkTab();
   askInput.value = "";
   clearAsk();
   clearOutput();
@@ -349,10 +453,7 @@ function showRoute(route) {
   totalExtra.textContent = extras.join(" · ");
   totalExtra.hidden = extras.length === 0;
 
-  setBadge(stairsBadge, route.uses_stairs, "Uses stairs", "No stairs");
-  setBadge(liftBadge, route.uses_lift, "Uses lift", "No lift");
-  setBadge(shuttleBadge, route.uses_shuttle, "Uses shuttle", "No shuttle");
-  setBadge(shelterBadge, route.fully_sheltered, "Sheltered", "Partly exposed");
+  renderBadges(route);
 
   showRouteOnMap(route);
 
@@ -370,11 +471,14 @@ function showRoute(route) {
     backButton.hidden = true;
     nextButton.hidden = true;
     finishButton.hidden = false;
+    progressFill.style.width = "100%";
+    syncWalkTab();
   } else {
     renderSteps();
   }
 
   resultCard.hidden = false;
+  resultCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
 // --------------------------------------------------------------------------
@@ -434,7 +538,7 @@ showOptionsButton.addEventListener("click", async () => {
 
   if (!optionsList.hidden && optionsList.childElementCount > 0) {
     optionsList.hidden = true;
-    showOptionsButton.textContent = "View others";
+    showOptionsButton.textContent = "View other routes";
     return;
   }
 
@@ -442,13 +546,18 @@ showOptionsButton.addEventListener("click", async () => {
   showOptionsButton.textContent = "Looking…";
   try {
     renderChoices(await requestRouteOptions(lastRequest));
-    showOptionsButton.textContent = "Hide others";
+    showOptionsButton.textContent = "Hide other routes";
   } catch (error) {
     showPlanError(error.message);
   } finally {
     showOptionsButton.disabled = false;
   }
 });
+
+/** Whether there is a route to walk, so the report screen can offer to go back. */
+export function hasRoute() {
+  return currentSteps.length > 0;
+}
 
 /** The step the user is currently on, so a report can be about the right place. */
 export function currentStep() {
@@ -477,7 +586,12 @@ async function findRoute(origin, destination) {
   lastRequest = { origin, destination, ...currentOptions() };
   optionsList.replaceChildren();
   optionsList.hidden = true;
-  showOptionsButton.textContent = "View others";
+  showOptionsButton.textContent = "View other routes";
+
+  // Destination last, so it leads the recent row: it is the end people
+  // come back to.
+  rememberPlaces(origin, destination);
+  renderRecent();
 
   try {
     const route = await requestRoute(lastRequest);
@@ -488,6 +602,59 @@ async function findRoute(origin, destination) {
     showPlanError(error.message);
   }
 }
+
+// --------------------------------------------------------------------------
+// Swapping ends, and places used before
+// --------------------------------------------------------------------------
+
+const nodeById = (id) => getNodes().find((node) => node.id === id) ?? null;
+
+swapButton.addEventListener("click", () => {
+  const origin = nodeById(originBox.selectedId());
+  const destination = nodeById(destinationBox.selectedId());
+
+  if (destination) originBox.select(destination);
+  else originBox.clear();
+  if (origin) destinationBox.select(origin);
+  else destinationBox.clear();
+
+  swapButton.classList.remove("is-spinning");
+  void swapButton.offsetWidth; // restart the animation on repeat taps
+  swapButton.classList.add("is-spinning");
+
+  // With both ends known, the way back is what they want to see.
+  if (origin && destination) findRoute(destination.id, origin.id);
+});
+
+function renderRecent() {
+  const places = recentPlaces();
+  recentBox.hidden = places.length === 0;
+
+  recentList.replaceChildren(
+    ...places.map((node) => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "recent-chip";
+      chip.title = `${node.name} (${placeWhere(node)})`;
+      chip.append(icon("clock"), node.name);
+      chip.addEventListener("click", () => {
+        // Fill whichever end is still empty; with both filled, a recent
+        // place is most likely the new destination.
+        const box =
+          !originBox.selectedId() && destinationBox.selectedId()
+            ? originBox
+            : destinationBox;
+        box.select(node);
+      });
+      return chip;
+    })
+  );
+}
+
+recentClear.addEventListener("click", () => {
+  clearRecent();
+  renderRecent();
+});
 
 form.addEventListener("submit", (event) => {
   event.preventDefault(); // stay on the page instead of reloading
