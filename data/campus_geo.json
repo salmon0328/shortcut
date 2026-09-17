@@ -1,0 +1,99 @@
+{
+  "attribution": "Building outlines © OpenStreetMap contributors (ODbL). Heights and floor elevations are estimates set by hand.",
+  "buildings": [
+    {
+      "name": "Hive",
+      "osm_way": 389084380,
+      "height_m": 32,
+      "floors": [
+        {
+          "floor": "B5",
+          "elevation_m": 0,
+          "note": "Plan fitted to the OSM outline. Places fitted through the lift lobby and four staircases that stack over B4's (residuals 0.2-0.8 m); B5's own calibration puts them several metres off its plan.",
+          "transform": {
+            "origin_lat": 1.34350221,
+            "origin_lon": 103.68236518,
+            "rotation_deg": 0.465,
+            "scale": 1.408078
+          },
+          "plan": {
+            "floorplan_id": "319ab66986ee45d8bcaa5673f2232853",
+            "transform": {
+              "origin_lat": 1.34352545,
+              "origin_lon": 103.6824416,
+              "rotation_deg": 0.656,
+              "scale": 0.029773
+            }
+          }
+        },
+        {
+          "floor": "B4",
+          "elevation_m": 4.5,
+          "note": "Plan fitted to the OSM outline; S3's outline also lands on S3. Places use B4's calibration, which agrees with the plan.",
+          "transform": {
+            "origin_lat": 1.34350492,
+            "origin_lon": 103.68239823,
+            "rotation_deg": 0.25,
+            "scale": 1.138603
+          },
+          "plan": {
+            "floorplan_id": "422bba841bcc4525aefd6eeefbb02ba1",
+            "transform": {
+              "origin_lat": 1.34350492,
+              "origin_lon": 103.68239823,
+              "rotation_deg": 0.25,
+              "scale": 0.029702
+            }
+          }
+        },
+        {
+          "floor": "B3",
+          "elevation_m": 9.0,
+          "note": "Plan fitted to the OSM outline. Places fitted through the lift lobby and four staircases stacked over B4's (residuals 1.7-3.1 m); B3's own calibration puts them well off its plan.",
+          "transform": {
+            "origin_lat": 1.34365082,
+            "origin_lon": 103.68220661,
+            "rotation_deg": 1.661,
+            "scale": 1.287059
+          },
+          "plan": {
+            "floorplan_id": "3104f65108bb46c596a4b97b1703e1be",
+            "transform": {
+              "origin_lat": 1.34352486,
+              "origin_lon": 103.68239752,
+              "rotation_deg": 0.0,
+              "scale": 0.030645
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "S3",
+      "osm_way": 49967805,
+      "height_m": 20,
+      "floors": [
+        {
+          "floor": "B3",
+          "elevation_m": 9.0
+        }
+      ]
+    },
+    {
+      "name": "SS",
+      "osm_way": 49967706,
+      "height_m": 24,
+      "floors": [
+        {
+          "floor": "B3",
+          "elevation_m": 9.0
+        },
+        {
+          "floor": "B4",
+          "elevation_m": 4.5
+        }
+      ]
+    }
+  ],
+  "places": {}
+}

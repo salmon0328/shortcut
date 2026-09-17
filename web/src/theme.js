@@ -39,6 +39,7 @@ function saveMode(mode) {
 }
 
 let mode = readMode();
+let lastResolved = null;
 
 function resolved() {
   if (mode !== "system") return mode;
@@ -55,6 +56,13 @@ function applyTheme() {
   document
     .querySelector('meta[name="theme-color"]')
     ?.setAttribute("content", CHROME[resolved()]);
+
+  // The 3D map swaps its base map to match; nothing else needs telling.
+  const now = resolved();
+  if (now !== lastResolved) {
+    lastResolved = now;
+    document.dispatchEvent(new CustomEvent("shortcut:theme", { detail: now }));
+  }
 }
 
 /** Wire a button that cycles system → light → dark. */

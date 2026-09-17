@@ -9,4 +9,10 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
   },
+  build: {
+    // The 3D map (MapLibre + deck.gl) is one ~1.9 MB chunk, loaded only when
+    // a map is first shown - see src/campus3d.js. The default 500 kB warning
+    // would fire on every build for a size that is known and accepted.
+    chunkSizeWarningLimit: 2000,
+  },
 });

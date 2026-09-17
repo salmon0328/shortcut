@@ -23,6 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from shortcut.directions import step_text
 from shortcut.floorplan_store import Floorplan
+from shortcut.geo import BuildingGeo, CampusGeo, FloorGeo, Transform
 from shortcut.graph_store import CampusGraph, Edge, Node
 from shortcut.photo_store import Photo
 from shortcut.report_store import (
@@ -1026,6 +1027,103 @@ class FloorplanSummary(BaseModel):
             is_calibrated=plan.is_calibrated,
             note=plan.note,
             url=f"/floorplans/{plan.id}/file",
+        )
+
+
+# --------------------------------------------------------------------------
+# The campus on the globe, for the 3D map
+# --------------------------------------------------------------------------
+
+
+class GeoTransform(BaseModel):
+    """Drawing units to the globe; see :class:`shortcut.geo.Transform`.
+
+    Drawing axes run as an image's do: ``u`` right, ``v`` down. A rotation of
+    0 is north-up and a positive one turns the drawing clockwise.
+    """
+
+    origin_lat: float
+    origin_lon: float
+    rotation_deg: float
+    scale: float = Field(description="Metres on the ground per drawing unit.")
+
+    @classmethod
+    def from_transform(cls, transform: Transform) -> "GeoTransform":
+        return cls(**transform.as_dict())
+
+
+class GeoPlan(BaseModel):
+    floorplan_id: str = Field(description="The floorplan these pixels belong to.")
+    transform: GeoTransform = Field(description="Image pixels to the globe.")
+
+
+class GeoFloor(BaseModel):
+    floor: str
+    elevation_m: float = Field(description="Height above the building's ground.")
+    placed: bool = Field(description="Whether this floor's places have positions.")
+    plan: GeoPlan | None = None
+
+    @classmethod
+    def from_floor(cls, level: FloorGeo) -> "GeoFloor":
+        return cls(
+            floor=level.floor,
+            elevation_m=level.elevation_m,
+            placed=level.transform is not None,
+            plan=(
+                GeoPlan(
+                    floorplan_id=level.plan.floorplan_id,
+                    transform=GeoTransform.from_transform(level.plan.transform),
+                )
+                if level.plan
+                else None
+            ),
+        )
+
+
+class GeoBuilding(BaseModel):
+    name: str
+    height_m: float
+    osm_way: int | None = None
+    footprint: list[list[float]] | None = Field(
+        default=None, description="Outer ring as [lon, lat] pairs, from OpenStreetMap."
+    )
+    floors: list[GeoFloor]
+
+    @classmethod
+    def from_building(cls, building: BuildingGeo) -> "GeoBuilding":
+        return cls(
+            name=building.name,
+            height_m=building.height_m,
+            osm_way=building.osm_way,
+            footprint=[list(point) for point in building.footprint]
+            if building.footprint
+            else None,
+            floors=[GeoFloor.from_floor(level) for level in building.floors],
+        )
+
+
+class CampusGeoResponse(BaseModel):
+    """Everything the 3D map needs that the graph does not say.
+
+    ``places`` holds only the places that could be placed; one missing from it
+    has no known position, and a map should say so rather than guess.
+    """
+
+    attribution: str = ""
+    buildings: list[GeoBuilding]
+    places: dict[str, list[float]] = Field(
+        description="node id -> [lon, lat, elevation_m]."
+    )
+
+    @classmethod
+    def build(cls, geo: CampusGeo, graph: CampusGraph) -> "CampusGeoResponse":
+        return cls(
+            attribution=geo.attribution,
+            buildings=[GeoBuilding.from_building(b) for b in geo.buildings],
+            places={
+                node_id: [round(lon, 8), round(lat, 8), round(elevation, 2)]
+                for node_id, (lon, lat, elevation) in geo.positions(graph).items()
+            },
         )
 
 

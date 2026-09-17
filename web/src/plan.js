@@ -16,6 +16,7 @@ import {
 import { getNodes, nodeLabel, nodeName, placeWhere } from "./data.js";
 import { createSearchBox } from "./searchBox.js";
 import { showEmptyMap, showRouteOnMap } from "./mapView.js";
+import * as campus3d from "./campus3d.js";
 import { clearRecent, isRecent, recentPlaces, rememberPlaces } from "./recent.js";
 
 const form = document.querySelector("#route-form");
@@ -57,6 +58,11 @@ const swapButton = document.querySelector("#swap-button");
 const recentBox = document.querySelector("#recent");
 const recentList = document.querySelector("#recent-list");
 const recentClear = document.querySelector("#recent-clear");
+
+// The sheet the form sits in, which can fold down to let the map fill the screen.
+const planView = document.querySelector("#plan-view");
+const sheetToggle = document.querySelector("#sheet-toggle");
+const sheetPeek = document.querySelector("#sheet-peek");
 
 // The plain-language box.
 const ask = document.querySelector("#ask");
@@ -395,6 +401,7 @@ function renderSteps() {
     currentSteps.length ? (currentStepIndex / currentSteps.length) * 100 : 100
   }%`;
   syncWalkTab();
+  campus3d.showStep(currentStepIndex);
 
   // Bring the step being walked into view. Skipped while the steps screen is
   // hidden (a route has just been found), where it would scroll the plan.
@@ -403,6 +410,67 @@ function renderSteps() {
     current.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 }
+
+// --------------------------------------------------------------------------
+// Folding the sheet
+// --------------------------------------------------------------------------
+
+/** One line saying what is on the map, shown while the form is folded. */
+function updatePeek() {
+  if (resultCard.hidden || !lastRequest) {
+    sheetPeek.textContent = "Plan a route";
+    return;
+  }
+  sheetPeek.textContent =
+    `${totalTimeOutput.textContent} · ${nodeName(lastRequest.origin)} → ` +
+    nodeName(lastRequest.destination);
+}
+
+export function setSheetCollapsed(collapsed) {
+  planView.classList.toggle("is-sheet-collapsed", collapsed);
+  sheetToggle.setAttribute("aria-expanded", String(!collapsed));
+  sheetToggle.setAttribute(
+    "aria-label",
+    collapsed ? "Show the route form" : "Hide the route form"
+  );
+  updatePeek();
+}
+
+const sheetCollapsed = () => planView.classList.contains("is-sheet-collapsed");
+
+// A swipe on the handle folds or unfolds; a tap toggles. Only the handle
+// listens, so scrolling the form itself never folds it by accident.
+let swipeStartY = null;
+let swiped = false;
+
+sheetToggle.addEventListener("pointerdown", (event) => {
+  swipeStartY = event.clientY;
+  swiped = false;
+  // Keep hearing this pointer after it slides off the handle, or a swipe
+  // would end over the map and never be seen here.
+  sheetToggle.setPointerCapture(event.pointerId);
+});
+
+sheetToggle.addEventListener("pointercancel", () => {
+  swipeStartY = null;
+});
+
+sheetToggle.addEventListener("pointerup", (event) => {
+  if (swipeStartY === null) return;
+  const moved = event.clientY - swipeStartY;
+  swipeStartY = null;
+  if (Math.abs(moved) < 24) return; // a tap: left to the click below
+  swiped = true;
+  setSheetCollapsed(moved > 0);
+});
+
+sheetToggle.addEventListener("click", () => {
+  if (swiped) {
+    swiped = false;
+    return;
+  }
+  setSheetCollapsed(!sheetCollapsed());
+});
 
 /** Forget the route and the places, back to the blank plan screen. */
 export function resetPlan() {
@@ -423,6 +491,9 @@ export function resetPlan() {
   clearAsk();
   clearOutput();
   showEmptyMap();
+  campus3d.clearRoute();
+  // A fresh journey starts at the form.
+  setSheetCollapsed(false);
 }
 
 function showRoute(route) {
@@ -456,6 +527,7 @@ function showRoute(route) {
   renderBadges(route);
 
   showRouteOnMap(route);
+  campus3d.showRoute(route);
 
   currentSteps = route.steps ?? [];
   currentStepIndex = 0;
@@ -478,7 +550,10 @@ function showRoute(route) {
   }
 
   resultCard.hidden = false;
-  resultCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  updatePeek();
+  if (!sheetCollapsed()) {
+    resultCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
 }
 
 // --------------------------------------------------------------------------
@@ -878,3 +953,4 @@ nextButton.addEventListener("click", () => {
 
 // Start with an empty map rather than a blank panel.
 showEmptyMap();
+updatePeek();

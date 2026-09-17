@@ -20,6 +20,7 @@ then open http://127.0.0.1:8000/docs to try the endpoints in a browser.
 
 from __future__ import annotations
 
+import json
 import logging
 
 import pymupdf
@@ -60,6 +61,7 @@ from shortcut.overrides import (
 )
 from shortcut.floorplan_build import build_drafts
 from shortcut.floorplan_store import FloorplanStore, FloorplanStoreError
+from shortcut.geo import CampusGeo, GeoError, load_campus_geo, load_scenery
 from shortcut.import_source_store import ImportSourceError, ImportSourceStore
 from shortcut.nodemap import node_id_for, read_uploaded_pdf
 from shortcut.photo_store import PhotoStore, PhotoStoreError
@@ -75,6 +77,7 @@ from shortcut.report_store import (
 )
 from shortcut.schemas import (
     BulkApprovalResult,
+    CampusGeoResponse,
     CandidateReviewResult,
     CandidateUpdateRequest,
     EdgeSummary,
@@ -148,6 +151,11 @@ IMPORT_SOURCES_DIR = PROJECT_ROOT / "data" / "import_sources"
 PHOTOS_DIR = PROJECT_ROOT / "data" / "photos"
 FLOORPLANS_DIR = PROJECT_ROOT / "data" / "floorplans"
 
+# Where the campus sits on the globe, for the 3D map. Both committed; see
+# shortcut.geo. Missing files mean flat floorplans only, not an error.
+CAMPUS_GEO_PATH = PROJECT_ROOT / "data" / "campus_geo.json"
+CAMPUS_BUILDINGS_PATH = PROJECT_ROOT / "data" / "campus_buildings.geojson"
+
 # Optional settings, read once at startup and only ever filling in what the
 # real environment leaves unset. A module-level path so tests can point it
 # somewhere empty and stay on local disk whatever a developer's own file says.
@@ -204,7 +212,27 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.floorplans = FloorplanStore(FLOORPLANS_DIR)
     app.state.overrides_path = GRAPH_OVERRIDES_PATH
     app.state.graph = _load_graph_with_overrides(GRAPH_OVERRIDES_PATH)
+    app.state.geo, app.state.geo_error = _load_geo()
+    try:
+        app.state.geo_scenery = load_scenery(CAMPUS_BUILDINGS_PATH)
+    except (GeoError, OSError) as error:
+        logger.error("campus scenery file unusable: %s", error)
+        app.state.geo_scenery = None  # the map draws our buildings alone
     yield
+
+
+def _load_geo() -> tuple[CampusGeo, str | None]:
+    """The campus's place on the globe, or why it could not be read.
+
+    Unlike the graph, a broken geo file does not stop the server: it only
+    decorates the map, and routing has nothing to do with it. The error is
+    kept so ``GET /geo`` can say what is wrong instead of looking empty.
+    """
+    try:
+        return load_campus_geo(CAMPUS_GEO_PATH, CAMPUS_BUILDINGS_PATH), None
+    except (GeoError, OSError) as error:
+        logger.error("campus geo file unusable: %s", error)
+        return CampusGeo(), str(error)
 
 
 def _load_graph_with_overrides(overrides_path: Path) -> CampusGraph:
@@ -300,6 +328,17 @@ def get_import_sources(request: Request) -> ImportSourceStore:
             detail="The import store is not ready yet. Try again shortly.",
         )
     return store
+
+
+def get_geo(request: Request) -> CampusGeo:
+    """Hand the campus geo data to an endpoint, or explain why there is none."""
+    error: str | None = getattr(request.app.state, "geo_error", None)
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"The campus geo file could not be read: {error}",
+        )
+    return getattr(request.app.state, "geo", None) or CampusGeo()
 
 
 def get_floorplans_store(request: Request) -> FloorplanStore:
@@ -958,6 +997,12 @@ def get_photos_list(
 # server-side cache below covers the first request; this covers all the rest.
 IMMUTABLE = "public, max-age=31536000, immutable"
 
+# The same image is fetched two ways: by an <img> or SVG <image>, which sends
+# no Origin and gets no CORS header back, and by the 3D map's WebGL texture
+# loader, which must see one. Without Vary the browser answers the second from
+# the first's cached copy, header-less, and blocks it for a year.
+IMAGE_HEADERS = {"Cache-Control": IMMUTABLE, "Vary": "Origin"}
+
 #: Images already fetched from the store, kept by id.
 #:
 #: Unbounded per process, which is safe here for a reason worth stating: an id
@@ -997,7 +1042,7 @@ def get_photo_file(
     return Response(
         content=content,
         media_type=photo.content_type,
-        headers={"Cache-Control": IMMUTABLE},
+        headers=IMAGE_HEADERS,
     )
 
 
@@ -1469,6 +1514,44 @@ def get_floorplans(
 
 
 @app.get(
+    "/geo",
+    response_model=CampusGeoResponse,
+    summary="Where the campus sits on the globe, for the 3D map",
+)
+def get_campus_geo(
+    graph: CampusGraph = Depends(get_graph),
+    geo: CampusGeo = Depends(get_geo),
+) -> CampusGeoResponse:
+    """Building outlines and heights, floor elevations, and place positions.
+
+    Empty lists, not an error, when nobody has placed the campus yet: the
+    frontend then keeps to flat floorplans.
+    """
+    return CampusGeoResponse.build(geo, graph)
+
+
+@app.get(
+    "/geo/scenery",
+    summary="Every other campus building, as GeoJSON, for the 3D map",
+)
+def get_campus_scenery(request: Request) -> Response:
+    """Outlines and heights of the buildings nobody routes through.
+
+    Sent as ready-made GeoJSON for the map library to fetch itself, and
+    cacheable for an hour: it only changes when the fetch script is re-run.
+    """
+    scenery = getattr(request.app.state, "geo_scenery", None) or {
+        "type": "FeatureCollection",
+        "features": [],
+    }
+    return Response(
+        content=json.dumps(scenery, separators=(",", ":"), ensure_ascii=False),
+        media_type="application/geo+json",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
+@app.get(
     "/floorplans/{floorplan_id}/file",
     summary="Fetch a floorplan image",
 )
@@ -1496,7 +1579,7 @@ def get_floorplan_file(
     return Response(
         content=content,
         media_type=plan.content_type,
-        headers={"Cache-Control": IMMUTABLE},
+        headers=IMAGE_HEADERS,
     )
 
 

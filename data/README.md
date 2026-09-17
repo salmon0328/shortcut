@@ -51,11 +51,45 @@ after, so graduating can correct the record but never silently change a route.
 
 Everything else here was measured on the walk.
 
+## `campus_geo.json` and `campus_buildings.geojson` — the campus on the globe
+
+The survey's `x`/`y` are metres on each floor's own drawing; nothing in it
+says where on Earth the Hive is. These two files do, for the 3D map only —
+routing never reads them.
+
+- **`campus_geo.json`** (hand-edited). Per building: its OpenStreetMap way, a
+  height, and per floor an `elevation_m` and two transforms — `transform`
+  takes a place's `x`/`y` to latitude/longitude, `plan.transform` takes that
+  floor's floorplan *pixels* there. `places` can pin a single place by
+  latitude/longitude when its drawn position is missing or wrong.
+- **`campus_buildings.geojson`** (generated). Building outlines from
+  OpenStreetMap, © OpenStreetMap contributors (ODbL): the buildings named
+  above, plus the rest of campus as scenery. Re-create it with
+  `scripts/fetch_osm_buildings.py --write`.
+
+How the Hive's three floors were placed, so the numbers can be checked:
+
+1. Each floorplan image was matched to the Hive's OpenStreetMap outline by
+   shape (its lobes line up, and on B4 so does S3's outline).
+2. **B4's places sit on their plan**, so B4's `transform` is the image fit.
+3. **B5's and B3's places do not** — their stored calibration puts them
+   several metres off their own plans (B3's lift lobby lands mid-atrium). So
+   their `transform` was fitted instead through the stairwells and lift that
+   stand directly over B4's (`georef_floor.py Hive B3 --stack-over B4`):
+   within 0.8 m on B5, 1.7–3.1 m on B3. `tests/test_geo.py` holds them to
+   5 m.
+
+**Estimates, not measurements:** every `height_m` and `elevation_m`, and the
+order of the Hive's floors (B5 lowest, B3 highest). S3 and the South Spine
+have outlines and heights but no placed floors yet, so a route's stretch
+through them shows as "not on the 3D map yet".
+
 ## Everything else in this folder
 
 | Path | What it is | In git? |
 |---|---|---|
 | `campus_graph.json` | the survey, above | yes |
+| `campus_geo.json`, `campus_buildings.geojson` | the campus on the globe, above | yes |
 | `survey_places.csv`, `survey_links.csv` | the walk, as it was written down | yes |
 | `survey_review.md` | what the last import changed, and what it refused to | yes |
 | `survey_sources/` | the drawn node map the survey was read from | yes |
