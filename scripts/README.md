@@ -18,6 +18,8 @@ Each script's own docstring carries its usage; this is the map.
 | `graduate_overrides.py` | Folds changes out of `data/graph_overrides.json` into the committed survey, for review as a git diff. Refuses to write if the live map would change |
 | `import_survey.py` | Reads the drawn node map PDF into the survey, and writes `data/survey_review.md` saying what it did and what it refused to do |
 | `upload_photos.py` | Uploads a folder-per-place of surveyed photographs in bulk, instead of a hundred separate page loads |
+| `fetch_osm_buildings.py` | Fetches building outlines from OpenStreetMap into `data/campus_buildings.geojson`, for the 3D map. Asks the public Overpass API once; the server never does |
+| `georef_floor.py` | Puts one floor on the globe from a few known points — places by latitude/longitude, stairwells stacked over a floor already placed, or floorplan pixels — and reports how far each point lands from where it should |
 | `upload_floorplans.py` | Uploads each floor's plan image *and* its calibration, which have to arrive together or the map knows the image exists and still cannot place a pin on it |
 
 ## Spent, and kept on purpose

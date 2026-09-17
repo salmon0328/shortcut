@@ -21,6 +21,7 @@ import {
 } from "./plan.js";
 import { prefillFromStep, resetForm } from "./report.js";
 import { initThemeToggle } from "./theme.js";
+import { initCampus3d } from "./campus3d.js";
 
 // One screen per section, in the order the wireframe walks them: splash,
 // plan, steps, report; admin sits off to the side behind its switch.
@@ -81,6 +82,8 @@ function showView(name) {
   }
 
   window.scrollTo(0, 0);
+  // Maps drawn while hidden have to be told they can be seen now.
+  document.dispatchEvent(new CustomEvent("shortcut:view", { detail: name }));
 }
 
 // --------------------------------------------------------------------------
@@ -246,6 +249,8 @@ async function start() {
   try {
     await loadReferenceData();
     stopPlanLoading();
+    // After the places, which the 3D map needs to know what floor each is on.
+    initCampus3d();
   } catch (error) {
     // Leave the Get route button disabled: with no places there is nothing
     // to route between, so re-enabling it would only produce a second error.

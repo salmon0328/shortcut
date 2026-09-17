@@ -70,6 +70,18 @@
         <div class="map-panel" id="map-panel">
           <div class="map-canvas" id="map-canvas"></div>
           <div class="map-floors" id="map-floors" hidden></div>
+
+          <!-- The 3D campus, drawn by campus3d.js when this device and the
+               campus allow it. The flat plan above stays as the fallback. -->
+          <div class="map3d" id="map3d" hidden>
+            <div class="map3d-canvas" id="map3d-canvas"></div>
+            <div class="map3d-floors" id="map3d-floors" hidden></div>
+            <p class="map3d-note" id="map3d-note" hidden></p>
+          </div>
+          <div class="map-mode" id="map-mode" role="group" aria-label="Map view" hidden>
+            <button type="button" data-mode="3d" aria-pressed="true">3D</button>
+            <button type="button" data-mode="plan" aria-pressed="false">Plan</button>
+          </div>
         </div>
 
         <div class="topbar">
@@ -87,7 +99,21 @@
         </div>
 
         <div class="sheet">
-          <div class="sheet-handle" aria-hidden="true"></div>
+          <!-- Tap or swipe to fold the form away and give the map the
+               screen; folded, it still says what route is showing. -->
+          <button
+            type="button"
+            class="sheet-toggle"
+            id="sheet-toggle"
+            aria-expanded="true"
+            aria-controls="sheet-body"
+            aria-label="Hide the route form"
+          >
+            <span class="sheet-handle" aria-hidden="true"></span>
+            <span class="sheet-peek" id="sheet-peek"></span>
+          </button>
+
+          <div class="sheet-body" id="sheet-body">
 
           <!-- Say it in a sentence, instead of filling the two boxes below.
                Hidden until the backend says the /ai routes are mounted, so a
@@ -255,6 +281,7 @@
             <div id="route-options" class="route-options" hidden></div>
           </section>
           <!-- Reporting without a route lives on the Report tab below. -->
+          </div>
         </div>
       </section>
 
@@ -271,6 +298,19 @@
           </div>
           <div class="progress" aria-hidden="true">
             <div class="progress-fill" id="progress-fill"></div>
+          </div>
+
+          <!-- Follows the step being walked, in 3D. Part of the sticky header
+               so it stays in view while the list scrolls under it. -->
+          <div class="walk-map" id="walk-map" hidden>
+            <div class="walk-map-frame">
+              <div class="map3d-canvas" id="walk-map-canvas"></div>
+              <div class="map3d-floors" id="walk-map-floor" hidden></div>
+              <p class="map3d-note" id="walk-map-note" hidden></p>
+            </div>
+            <button type="button" id="walk-map-toggle" class="text-button walk-map-toggle">
+              Hide map
+            </button>
           </div>
         </header>
 

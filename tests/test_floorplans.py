@@ -335,6 +335,23 @@ def test_a_floorplan_image_tells_the_browser_it_will_never_change(
     assert "immutable" in response.headers["cache-control"]
 
 
+def test_a_floorplan_image_is_cached_separately_per_origin(client: TestClient) -> None:
+    """The 3D map loads it with CORS after an <img> loaded it without.
+
+    A shared cache entry would hand the map a copy with no CORS header, and
+    the browser would refuse it; Vary keeps the two apart.
+    """
+    plan = upload(client).json()
+
+    plain = client.get(f"/floorplans/{plan['id']}/file")
+    cross = client.get(
+        f"/floorplans/{plan['id']}/file", headers={"Origin": "http://localhost:5173"}
+    )
+
+    assert "origin" in plain.headers["vary"].lower()
+    assert cross.headers["access-control-allow-origin"] == "http://localhost:5173"
+
+
 def test_a_deleted_floorplan_stops_being_served_even_though_it_was_cached(
     client: TestClient,
 ) -> None:

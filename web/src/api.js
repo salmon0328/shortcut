@@ -113,6 +113,23 @@ export async function fetchFloorplan(building, floor) {
   const found = await request(`/floorplans?${query}`);
   return Array.isArray(found) && found.length > 0 ? found[0] : null;
 }
+/**
+ * Where the campus sits on the globe, for the 3D map: buildings, floor
+ * heights, and a [lon, lat, elevation] for each place that has one. Fetched
+ * once per page; it only changes when the committed geo file does.
+ */
+let geoPromise = null;
+export function fetchGeo() {
+  geoPromise ??= request("/geo").catch((error) => {
+    geoPromise = null; // let a later map try again
+    throw error;
+  });
+  return geoPromise;
+}
+
+/** The rest of campus as GeoJSON, fetched by the map library itself. */
+export const sceneryUrl = () => `${API_BASE_URL}/geo/scenery`;
+
 export const submitReport = (payload) => postJson("/reports", payload);
 
 /**
